@@ -34,13 +34,13 @@ The json structure should look like the following:
 
 ```json
 {
-  "IP_ADDRESS": str,
-  "HOST": str,
-  "PORT": str,
-  "DATABASE": str,
-  "DB_NAME": str,
-  "DB_USER": str,
-  "DB_PASS": str,
+  "IP_ADDRESS": "127.0.0.1",
+  "HOST": "localhost",
+  "PORT": "8000",
+  "DATABASE": "postgres+pycogs2://localhost:port@user:pass",
+  "DB_NAME": "restack",
+  "DB_USER": "user",
+  "DB_PASS": "pass",
 }
 ```
 
