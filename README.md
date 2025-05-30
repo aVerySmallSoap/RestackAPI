@@ -4,21 +4,19 @@
 >
 > This is a rewrite and restructure of the old *[Restack API](https://github.com/aVerySmallSoap/Capstone_Flask_API)*. Further commits and improvements to the project will be ported into this repository instead
 
-> [!WARNING]
+> [!CAUTION]
 >
 > This repository mostly offers simple functionality and the structure of the project
 
 Restack API is the bridge that connects the web UI with scanner orchestration. The API allows users to scan URLs using three scanners— *Wapiti*, *OWASP Zap*, and *Arachni*.
 
-
 ## Building
 
 To build the project, you first have to install some of its requirements such as:
 
-* Python >3.13
+* Python >= 3.13
 
 This should allow you to start building and using the application for yourself.
-
 
 ## Configuration
 
