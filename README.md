@@ -74,3 +74,7 @@ The API also relies on these external tools to achieve its functionality:
 
 * Docker
 * Postgresql
+
+#### Scripts
+
+[enthec's python-webappanalyzer](https://github.com/enthec/python-webappanalyzer)

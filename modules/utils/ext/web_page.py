@@ -4,6 +4,9 @@ from bs4 import BeautifulSoup
 from requests import Response
 from requests.structures import CaseInsensitiveDict
 
+## Authored by: Enthec
+## Repository: enthec/python-webappanalyzer
+## Link: https://github.com/enthec/python-webappanalyzer
 
 class WebPage:
     def __init__(self, url: str, html: bytes, headers: CaseInsensitiveDict, cookies: CookieJar):

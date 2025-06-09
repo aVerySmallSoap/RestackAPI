@@ -8,6 +8,9 @@ import requests
 
 from webappanalyzer.web_page import WebPage
 
+## Authored by: Enthec
+## Repository: enthec/python-webappanalyzer
+## Link: https://github.com/enthec/python-webappanalyzer
 
 class WebAppAnalyzer:
     def __init__(self, update: bool = False, path: pathlib.Path = pathlib.Path("data")):
