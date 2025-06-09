@@ -1,2 +1,4 @@
 config/
 .idea/
+./ext/webappanalyzer/README.md
+./ext/webappanalyzer/requirements.txt
