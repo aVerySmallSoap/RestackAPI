@@ -1,3 +1,4 @@
 config/
 .idea/
 modules/utils/ext/requirements.txt
+temp/

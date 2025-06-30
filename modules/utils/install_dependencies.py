@@ -7,8 +7,6 @@ subprocess.check_call([
     "pip",
     "install",
     "wapiti3",
-    "Flask",
-    "flask-cors",
     "tz",
     "SQLAlchemy",
     "SQLAlchemy-Utils",
@@ -17,4 +15,5 @@ subprocess.check_call([
     "beautifulsoup4",
     "requests",
     "ijson",
+    "whatweb",
 ])
