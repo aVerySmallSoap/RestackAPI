@@ -16,5 +16,9 @@ async def wapiti_scan(url: str):
 async def wapiti_report(report_id: str):
     pass
 
+@app.get("/api/v1/whatweb/scan")
+async def whatweb_scan(url: str):
+    pass
+
 if __name__ == '__main__':
     pass

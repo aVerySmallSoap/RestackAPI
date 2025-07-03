@@ -3,16 +3,20 @@ import json
 import docker
 from docker.types import Mount
 
+from modules.utils.env import ENV
+
 # TODO LIST
 # TODO: allow a controller to manage whatweb and its contents
 # TODO: allow a scan from python (API) to a container
+
+#TODO: check if a report file already exists, if so, flush its contents before writing
 client = docker.from_env()
 
 def volume_test():
     client.containers.run("whatweb",
                           ["./whatweb", "-a 3", "--log-json=./reports/report.json", "https://dnsc.edu.ph/"],
                           volumes={
-                              'D:\\Coding_Projects\\Python\\RestackAPI\\temp\\whatweb': {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
+                              ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                           auto_remove=True)
 
 def mount_test():
@@ -33,5 +37,5 @@ def vol_log():
         for category in data[0]:
             print(category)
 
-# volume_test()
+volume_test()
 vol_log()
