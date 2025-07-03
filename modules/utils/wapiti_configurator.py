@@ -3,9 +3,10 @@ from modules.managers.report_manager import ReportManager
 
 #TODO: Change default modules so scanning will be faster
 #TODO: Limit the scan to at least 10 pages and with a depth of 3
-#TODO: An average full wapiti scan takes about ~30 mins
 #TODO: Each user has a separate scan configuration
-class Configurator:
+
+#An average full wapiti scan takes about ~30 mins
+class WapitiConfigurator:
     """Handles the configuration of the wapiti library.
     Any additional arguments passed to this class are passed to wapiti.
     This class provides basic module arguments for a wapiti scan, however, it can be manually overridden.
@@ -27,7 +28,7 @@ class Configurator:
     #final configuration
     _args = None
 
-    #Non-shit
+    #report file path
     _path:str = None
 
     def set_modules(self, _modules:list = None):
