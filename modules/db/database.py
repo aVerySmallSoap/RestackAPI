@@ -1,10 +1,12 @@
-from datetime import datetime
-
-from sqlalchemy import String, create_engine
-from sqlalchemy.orm import Session, DeclarativeBase, Mapped
-from sqlalchemy.testing.schema import mapped_column
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, DeclarativeBase
 from sqlalchemy_utils import database_exists, create_database
 import uuid
+
+from modules.db.tables.Reports import Report
+
+class Base(DeclarativeBase):
+    pass
 
 class Database:
 
@@ -47,15 +49,3 @@ class Database:
         if self._engine is None:
             self._engine = self._check_engine()
         return self._engine
-
-class Base(DeclarativeBase):
-    pass
-
-class Report(Base):
-    __tablename__ = "reports"
-
-    id: Mapped[str] = mapped_column(primary_key=True)
-    scan_date: Mapped[datetime]
-    scanner: Mapped[str] = mapped_column(String(50))
-    scan_type: Mapped[str] = mapped_column(String(50))
-    path: Mapped[str]
