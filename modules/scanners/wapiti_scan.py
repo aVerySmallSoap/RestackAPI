@@ -4,7 +4,8 @@ import subprocess
 # Update wapiti
 #TODO: TRACK OF VULN DATABASE UPDATES
 #TODO: find what the process returns or just return the status code
-def scan(url, path) -> int:
+#TODO: find a more secure way of executing wapiti
+def scan(url:str, path:str) -> int:
     """Activate a scan using wapiti"""
     # process = subprocess.Popen(["wapiti", "--update"])
     # process.wait()
