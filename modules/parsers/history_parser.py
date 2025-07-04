@@ -1,3 +1,5 @@
+import os
+
 from modules.db.database import Database, Report
 from sqlalchemy.orm import Session
 from sqlalchemy import select

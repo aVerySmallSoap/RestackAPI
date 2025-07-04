@@ -3,7 +3,7 @@ from sqlalchemy import String
 from sqlalchemy.orm import Mapped
 from sqlalchemy.testing.schema import mapped_column
 
-from modules.db.database import Base
+from modules.db.session import Base
 
 class Report(Base):
     __tablename__ = "reports"

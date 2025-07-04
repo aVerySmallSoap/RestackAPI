@@ -1,18 +1,15 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, DeclarativeBase
+from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, create_database
 import uuid
 
+from modules.db.session import Base
 from modules.db.tables.Reports import Report
-
-class Base(DeclarativeBase):
-    pass
 
 class Database:
 
     _engine = None
     _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack"
-    _Base = DeclarativeBase()
 
     def __int__(self):
         pass
@@ -36,7 +33,7 @@ class Database:
         with Session(engine) as session:
             report = Report(
                 id=str(uuid.uuid4()),
-                scan_date=timestamp,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="Quick Scan",
                 scanner="Wapiti",
                 path=url
