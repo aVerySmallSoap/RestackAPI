@@ -2,3 +2,4 @@ config/ENV.json
 .idea/
 modules/utils/ext/requirements.txt
 temp/
+reports/*
