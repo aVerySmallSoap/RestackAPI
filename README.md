@@ -20,7 +20,8 @@ Restack attempts to alleviate these issues by providing a user interface and gui
 Restack mainly targets developers who have a keen interest in learning cybersecurity and are afraid/do not want to use CLI tools.
 
 > [!IMPORTANT]
-> As SecureCodeBox states, these tools does **not** attempt to replace penetration testers nor is it a one-button-click solution. Although Restack aims to reduce the need for data interpretation, developers still need to learn how to interpret the data/results to take advantage of these tools.
+> As SecureCodeBox states, these tools does **not** attempt to replace penetration testers nor is it a one-button-click solution. Although Restack aims to reduce the need for data interpretation, developers still need to learn how to interpret the data/results to take advantage of these tools. <br/>
+>
 > Restack is a passion and capstone project! Expect bugs and subpar feature implementation
 
 ## Quick Start
