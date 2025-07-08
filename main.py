@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from modules.db.database import Database
+from modules.filters.filter_date import date_filter_range
 from modules.managers.report_manager import ReportManager
 from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
 from modules.parsers.wapiti_parser import parse as wapiti_parse, parse
@@ -49,6 +50,10 @@ async def history_fetch():
 @app.get("/api/v1/report/{report_id}")
 async def report_fetch(report_id: str):
     return fetch_report(report_id)
+
+@app.get("/api/v1/filter/reports/range/")
+async def filter_date_by_range(start:str, end:str):
+    return date_filter_range(_db.engine, start, end)
 
 if __name__ == '__main__':
     pass
