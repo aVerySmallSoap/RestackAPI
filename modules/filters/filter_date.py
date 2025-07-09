@@ -8,7 +8,6 @@ from sqlalchemy import Engine, select
 
 from modules.db.table_collection import Report
 
-
 def date_filter_range(connection:Engine, start:str = None, end:str = None) -> list:
     """Filters results in a range of dates."""
     with Session(connection) as session:
@@ -37,11 +36,20 @@ def date_filter_week(connection:Engine, upperbound:str = None):
         _results = session.execute(select(Report).where(Report.scan_date >= lowerbound_date, Report.scan_date <= upperbound)).all()
         if len(_results) == 0:
             print("No results found.")
-            return None
+            return {"message": "No results found"}
         for row in _results:
+            _temp = {}
             for report in row:
-                print(f"{report.id}: {report.scan_date} | {report.scanner} |{report.scan_type}")
-    return None
+                _temp.update({"id": report.id})
+                _temp.update({"date": report.scan_date.strftime("%Y-%m-%d %H:%M:%S")})
+                _temp.update({"scanner": report.scanner})
+                _temp.update({"type": report.scan_type})
+                # Fetch URL
+                with open(report.path, "r") as file:
+                    report = json.load(file)
+                    _temp.update({"target": report["infos"]["target"]})
+            _reports.append(_temp)
+    return _temp
 
 
 def date_filter_month(connection:Engine, month:int = None):
@@ -51,11 +59,20 @@ def date_filter_month(connection:Engine, month:int = None):
         _results = session.execute(select(Report).filter(sqlalchemy.sql.extract('month', Report.scan_date)==month)).all()
         if len(_results) == 0:
             print("No results found")
-            return None
+            return {"message": "No results found"}
         for row in _results:
+            _temp = {}
             for report in row:
-                print(f"{report.id}: {report.scan_date} | {report.scanner} |{report.scan_type}")
-    return None
+                _temp.update({"id": report.id})
+                _temp.update({"date": report.scan_date.strftime("%Y-%m-%d %H:%M:%S")})
+                _temp.update({"scanner": report.scanner})
+                _temp.update({"type": report.scan_type})
+                # Fetch URL
+                with open(report.path, "r") as file:
+                    report = json.load(file)
+                    _temp.update({"target": report["infos"]["target"]})
+            _reports.append(_temp)
+    return _temp
 
 
 def date_filter_year(connection:Engine, year:str = None):
@@ -65,10 +82,19 @@ def date_filter_year(connection:Engine, year:str = None):
         _results = session.execute(select(Report).filter(sqlalchemy.sql.extract('year', Report.scan_date)==year)).all()
         if len(_results) == 0:
             print("No results found")
-            return None
+            return {"message": "No results found"}
         for row in _results:
-            for item in row:
-                print(f"{item.id}: {item.scan_date} | {item.scanner} |{item.scan_type}")
+            _temp = {}
+            for report in row:
+                _temp.update({"id": report.id})
+                _temp.update({"date": report.scan_date.strftime("%Y-%m-%d %H:%M:%S")})
+                _temp.update({"scanner": report.scanner})
+                _temp.update({"type": report.scan_type})
+                # Fetch URL
+                with open(report.path, "r") as file:
+                    report = json.load(file)
+                    _temp.update({"target": report["infos"]["target"]})
+            _reports.append(_temp)
         return None
 
 def date_filter(connection:Engine, delta:str|int = None):
