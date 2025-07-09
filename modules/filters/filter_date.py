@@ -6,8 +6,7 @@ import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy import Engine, select
 
-from modules.db.database import Database
-from modules.db.tables.Reports import Report
+from modules.db.table_collection import Report
 
 
 def date_filter_range(connection:Engine, start:str = None, end:str = None) -> list:

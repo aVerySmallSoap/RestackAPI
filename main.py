@@ -35,13 +35,13 @@ async def wapiti_scan(url: URL):
     _db.insert_wapiti_report(_scan_start, path)
     return parsed
 
-@app.get("/api/v1/wapiti/report/{report_id}")
-async def wapiti_report(report_id: str):
-    return parse(fetch_reports(report_id))
-
 @app.get("/api/v1/whatweb/scan")
 async def whatweb_scan(url: str):
     pass
+
+@app.get("/api/v1/wapiti/report/{report_id}")
+async def wapiti_report(report_id: str):
+    return parse(fetch_reports(report_id))
 
 @app.get("/api/v1/history/fetch")
 async def history_fetch():

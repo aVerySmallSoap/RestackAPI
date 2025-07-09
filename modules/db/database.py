@@ -4,7 +4,7 @@ from sqlalchemy_utils import database_exists, create_database
 import uuid
 
 from modules.db.session import Base
-from modules.db.tables.Reports import Report
+from modules.db.table_collection import Report
 
 class Database:
 
