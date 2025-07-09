@@ -1,6 +1,7 @@
 ## This module contains the necessary functions to filter results by date
 import json
 
+import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy import Engine, select
 
@@ -29,13 +30,32 @@ def date_filter_week(connection:Engine, date:str = None):
     """Filters results within a week."""
     pass
 
-def date_filter_month(connection:Engine, month:str = None):
+def date_filter_month(connection:Engine, month:int = None):
     """Filters results for the specified month."""
-    pass
+    with Session(connection) as session:
+        _reports = []
+        _results = session.execute(select(Report).filter(sqlalchemy.sql.extract('month', Report.scan_date)==month)).all()
+        if len(_results) == 0:
+            print("No results found")
+            return None
+        for row in _results:
+            for item in row:
+                print(f"{item.id}: {item.scan_date} | {item.scanner} |{item.scan_type}")
+        return None
+
 
 def date_filter_year(connection:Engine, year:str = None):
     """Filters results for the specified year."""
-    pass
+    with Session(connection) as session:
+        _reports = []
+        _results = session.execute(select(Report).filter(sqlalchemy.sql.extract('year', Report.scan_date)==year)).all()
+        if len(_results) == 0:
+            print("No results found")
+            return None
+        for row in _results:
+            for item in row:
+                print(f"{item.id}: {item.scan_date} | {item.scanner} |{item.scan_type}")
+        return None
 
 def date_filter(connection:Engine, date:str|int = None):
     """Filters results to a custom range of days"""
