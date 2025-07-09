@@ -55,5 +55,17 @@ async def report_fetch(report_id: str):
 async def filter_date_by_range(start:str, end:str):
     return date_filter_range(_db.engine, start, end)
 
+@app.get("/api/v1/filter/reports/week/")
+async def filter_date_by_month(date:str):
+    pass
+
+@app.get("/api/v1/filter/reports/month/")
+async def filter_date_by_month(month:int):
+    pass
+
+@app.get("/api/v1/filter/reports/year/")
+async def filter_date_by_year(year:int):
+    pass
+
 if __name__ == '__main__':
     pass

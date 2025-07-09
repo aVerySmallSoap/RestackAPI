@@ -1,10 +1,12 @@
 ## This module contains the necessary functions to filter results by date
 import json
+from datetime import date, timedelta
 
 import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy import Engine, select
 
+from modules.db.database import Database
 from modules.db.tables.Reports import Report
 
 
@@ -26,9 +28,22 @@ def date_filter_range(connection:Engine, start:str = None, end:str = None) -> li
             _reports.append(_temp)
     return _reports
 
-def date_filter_week(connection:Engine, date:str = None):
+def date_filter_week(connection:Engine, upperbound:str = None):
     """Filters results within a week."""
-    pass
+    upperbound_date = date.fromisoformat(upperbound)
+    week_delta = timedelta(days=6) # date_delta is included in the operation, therefore, only 6 days are needed
+    lowerbound_date = upperbound_date - week_delta
+    with Session(connection) as session:
+        _reports = []
+        _results = session.execute(select(Report).where(Report.scan_date >= lowerbound_date, Report.scan_date <= upperbound)).all()
+        if len(_results) == 0:
+            print("No results found.")
+            return None
+        for row in _results:
+            for report in row:
+                print(f"{report.id}: {report.scan_date} | {report.scanner} |{report.scan_type}")
+    return None
+
 
 def date_filter_month(connection:Engine, month:int = None):
     """Filters results for the specified month."""
@@ -39,9 +54,9 @@ def date_filter_month(connection:Engine, month:int = None):
             print("No results found")
             return None
         for row in _results:
-            for item in row:
-                print(f"{item.id}: {item.scan_date} | {item.scanner} |{item.scan_type}")
-        return None
+            for report in row:
+                print(f"{report.id}: {report.scan_date} | {report.scanner} |{report.scan_type}")
+    return None
 
 
 def date_filter_year(connection:Engine, year:str = None):
@@ -57,6 +72,6 @@ def date_filter_year(connection:Engine, year:str = None):
                 print(f"{item.id}: {item.scan_date} | {item.scanner} |{item.scan_type}")
         return None
 
-def date_filter(connection:Engine, date:str|int = None):
+def date_filter(connection:Engine, delta:str|int = None):
     """Filters results to a custom range of days"""
     pass
