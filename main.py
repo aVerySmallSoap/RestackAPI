@@ -10,6 +10,7 @@ from modules.managers.report_manager import ReportManager
 from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
 from modules.parsers.wapiti_parser import parse as wapiti_parse, parse
 from modules.scanners.wapiti_scan import scan as scan_wapiti
+from modules.utils.launch_tech_discovery import fetch_plugins_data, discover_then_volume, parse_volume_data
 
 _report_manager = ReportManager()
 _db = Database()
@@ -26,14 +27,17 @@ class URL(BaseModel):
 
 @app.post("/api/v1/wapiti/scan")
 async def wapiti_scan(url: URL):
-    print(url)
+    _URL = url.url
     _scan_start = datetime.now()
     _report_manager.generate(_scan_start.strftime("%Y%m%d_%I-%M-%S"))
     path = _report_manager.build()
-    scan_wapiti(url.url, path)
+    scan_wapiti(_URL, path)
     parsed = wapiti_parse(path)
-    _db.insert_wapiti_report(_scan_start, path)
-    return parsed
+    await discover_then_volume(_URL)
+    raw_plugins = fetch_plugins_data()
+    plugins = parse_volume_data()
+    _db.insert_wapiti_quick_report(_scan_start, path, raw_plugins)
+    return {"data": parsed, "plugins": plugins}
 
 @app.get("/api/v1/whatweb/scan")
 async def whatweb_scan(url: str):

@@ -7,11 +7,6 @@ import subprocess
 #TODO: find a more secure way of executing wapiti
 def scan(url:str, path:str) -> int:
     """Activate a scan using wapiti"""
-    # process = subprocess.Popen(["wapiti", "--update"])
-    # process.wait()
-    # print("wapiti updated")
-
-    # Start running config
     config = WapitiConfigurator()
     config.set_url(url)
     config.set_path(path)
