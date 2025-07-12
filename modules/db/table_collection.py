@@ -13,7 +13,17 @@ class Report(Base):
     scanner: Mapped[str] = mapped_column(String(50))
     scan_type: Mapped[str] = mapped_column(String(50))
     path: Mapped[str]
-    # children = relationship("Scan", back_populates="report", uselist=False)
+    scan = relationship("Scan", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
+    tech = relationship("TechDiscovery", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
+
+class TechDiscovery(Base):
+    __tablename__ = "tech_discovery"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    report_id: Mapped[str] = mapped_column(ForeignKey("reports.id"))
+    scan_date: Mapped[datetime] = mapped_column(String(50))
+    data = Column(JSON)
+    parent = relationship("Report", back_populates="tech")
 
 class Scan(Base):
     __tablename__ = "scan"
@@ -24,4 +34,4 @@ class Scan(Base):
     scanner: Mapped[str] = mapped_column(String(50))
     scan_type: Mapped[str] = mapped_column(String(50))
     data = Column(JSON)
-    # parent = relationship("Report", back_populates="scan")
+    parent = relationship("Report", back_populates="scan")

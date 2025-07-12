@@ -4,7 +4,7 @@ from sqlalchemy_utils import database_exists, create_database
 import uuid
 
 from modules.db.session import Base
-from modules.db.table_collection import Report
+from modules.db.table_collection import Report, TechDiscovery
 
 class Database:
 
@@ -28,17 +28,27 @@ class Database:
         engine = self._check_engine()
         Base.metadata.create_all(engine)
 
-    def insert_wapiti_report(self, timestamp, url):
+    def insert_wapiti_quick_report(self, timestamp, url:str, data):
         engine = self._check_engine()
+        _tables = []
         with Session(engine) as session:
+            report_id = str(uuid.uuid4())
             report = Report(
-                id=str(uuid.uuid4()),
+                id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="Quick Scan",
                 scanner="Wapiti",
                 path=url
             )
-            session.add(report)
+            tech_disc = TechDiscovery(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                data=data
+            )
+            _tables.append(report)
+            _tables.append(tech_disc)
+            session.add_all(_tables)
             session.commit()
 
     @property
