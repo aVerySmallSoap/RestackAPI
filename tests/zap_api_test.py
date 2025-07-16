@@ -27,8 +27,7 @@ async def run_container(apikey:str):
 if not os.path.isfile("../temp/zap/report.json"):
     open("../temp/zap/report.json", "x").close()
 
-# localhost test
-# host.docker.internal
+# localhost test use: host.docker.internal
 target = 'http://host.docker.internal:25565'
 zap = ZAPv2(apikey=apiKey)
 
@@ -79,8 +78,6 @@ async def test():
     await run_container(apiKey)
     test_explore()
     test_active()
-    pprint(zap.core.alerts(baseurl=target))
-    print(zap.wappalyzer.list_site(target))
     print(zap.reports.generate(title="test", template="traditional-json", sites=target))
 
 
