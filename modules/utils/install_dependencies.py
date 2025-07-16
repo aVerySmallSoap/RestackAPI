@@ -15,4 +15,5 @@ subprocess.check_call([
     "beautifulsoup4",
     "requests",
     "ijson",
+    "zaproxy"
 ])

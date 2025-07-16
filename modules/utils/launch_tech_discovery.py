@@ -21,7 +21,8 @@ async def discover_then_volume(url:str):
                           ["./whatweb", "-a 3", "--log-json=./reports/report.json", url],
                           volumes={
                               ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
-                          auto_remove=True)
+                          auto_remove=True,
+                          name="whatweb")
 
 async def discover_then_mount(url:str):
     """Launches a docker container that utilizes the mount flag to store a whatweb report."""
