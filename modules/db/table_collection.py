@@ -37,4 +37,13 @@ class Scan(Base):
     parent = relationship("Report", back_populates="scan")
 
 class Vulnerability(Base):
-    pass
+    __tablename__ = "vulnerabilities"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    report_id: Mapped[str] = mapped_column(ForeignKey('reports.id'))
+    scan_date: Mapped[datetime]
+    scanner: Mapped[str] = mapped_column(String(50))
+    vulnerability_type: Mapped[str] = mapped_column(String(100))
+    severity:Mapped[str] = mapped_column(String(50))
+    endpoint: Mapped[str]
+    data = Column(JSON)

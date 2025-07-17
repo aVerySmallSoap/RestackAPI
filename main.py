@@ -30,6 +30,10 @@ class URL(BaseModel):
 @app.post("/api/v1/wapiti/scan")
 async def wapiti_scan(url: URL):
     _URL = url.url
+    # == testing code ==
+    if _URL.__contains__("localhost") or _URL.__contains__("127.0.0.1"):
+        _URL = _URL.replace("localhost", "host.docker.internal")
+    # == testing end ==
     _scan_start = datetime.now()
     _report_manager.generate(_scan_start.strftime("%Y%m%d_%I-%M-%S"))
     path = _report_manager.build()

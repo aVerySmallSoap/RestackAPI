@@ -52,7 +52,6 @@ def parse_volume_data():
 def fetch_plugins_data() -> list:
     with open(_local_report_path, "r") as f:
         data = json.load(f)
-        f.close()
     return data[0]
 
 #primitive implementation until docker manager is created
