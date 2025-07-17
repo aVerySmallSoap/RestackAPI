@@ -52,7 +52,9 @@ def parse_volume_data():
 def fetch_plugins_data() -> list:
     with open(_local_report_path, "r") as f:
         data = json.load(f)
-    return data[0]
+        if len(data) > 0:
+            return data[0]
+    return data
 
 #primitive implementation until docker manager is created
 def _sanitize_report():

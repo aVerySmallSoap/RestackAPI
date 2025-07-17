@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import time
-from pprint import pprint
 
 import docker
 from zapv2 import ZAPv2
@@ -79,5 +78,3 @@ async def test():
     test_explore()
     test_active()
     print(zap.reports.generate(title="test", template="traditional-json", sites=target))
-
-asyncio.run(test())

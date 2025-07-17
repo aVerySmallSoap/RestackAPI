@@ -12,6 +12,9 @@ from modules.parsers.wapiti_parser import parse as wapiti_parse, parse
 from modules.scanners.wapiti_scan import scan as scan_wapiti
 from modules.utils.launch_tech_discovery import fetch_plugins_data, discover_then_volume, parse_volume_data
 
+# == TEST WEBSITES ==
+# https://public-firing-range.appspot.com
+
 _report_manager = ReportManager()
 _db = Database()
 
@@ -37,6 +40,7 @@ async def wapiti_scan(url: URL):
         isLocal = True
         local_url = _URL.replace("localhost", "host.docker.internal")
     # == testing end ==
+    print(_URL)
     _scan_start = datetime.now()
     _report_manager.generate(_scan_start.strftime("%Y%m%d_%I-%M-%S"))
     path = _report_manager.build()
