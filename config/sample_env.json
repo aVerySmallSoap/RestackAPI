@@ -1,5 +1,6 @@
 {
   "report_paths": {
-    "whatweb": "C\\Users\\Public\\Documents"
+    "whatweb": "C\\Users\\Public\\Documents\\restack\\reports\\whatweb",
+    "zap": "C\\Users\\Public\\Documents\\restack\\reports\\zap"
   }
 }

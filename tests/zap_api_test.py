@@ -80,5 +80,4 @@ async def test():
     test_active()
     print(zap.reports.generate(title="test", template="traditional-json", sites=target))
 
-
 asyncio.run(test())

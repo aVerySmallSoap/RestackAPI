@@ -2,7 +2,6 @@ from modules.utils.wapiti_configurator import WapitiConfigurator
 import subprocess
 
 # Update wapiti
-#TODO: TRACK OF VULN DATABASE UPDATES
 #TODO: find what the process returns or just return the status code
 #TODO: find a more secure way of executing wapiti
 def scan(url:str, path:str) -> int:

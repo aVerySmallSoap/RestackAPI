@@ -7,6 +7,7 @@ subprocess.check_call([
     "pip",
     "install",
     "wapiti3",
+    "fastapi[standard]",
     "tz",
     "SQLAlchemy",
     "SQLAlchemy-Utils",

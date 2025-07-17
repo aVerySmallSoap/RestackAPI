@@ -4,13 +4,12 @@ import os
 import docker
 from docker.types import Mount
 
-from modules.utils.env import ENV
+from modules.utils.load_env import ENV
 
 # TODO LIST
 # TODO: allow a controller to manage whatweb and its contents
 # TODO: allow a scan from python (API) to a container
 
-#TODO: check if a report file already exists, if so, flush its contents before writing
 _local_report_path = "./temp/whatweb/report.json"
 client = docker.from_env()
 

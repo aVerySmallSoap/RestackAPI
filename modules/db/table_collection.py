@@ -35,3 +35,6 @@ class Scan(Base):
     scan_type: Mapped[str] = mapped_column(String(50))
     data = Column(JSON)
     parent = relationship("Report", back_populates="scan")
+
+class Vulnerability(Base):
+    pass

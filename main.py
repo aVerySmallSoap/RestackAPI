@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from modules.db.database import Database
-from modules.filters.filter_date import date_filter_range
+from modules.filters.filter_by_date import date_filter_range
 from modules.managers.report_manager import ReportManager
 from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
 from modules.parsers.wapiti_parser import parse as wapiti_parse, parse
@@ -24,6 +24,8 @@ app.add_middleware(
 
 class URL(BaseModel):
     url:str
+
+# TODO: Check if reports folder is present in CWD
 
 @app.post("/api/v1/wapiti/scan")
 async def wapiti_scan(url: URL):
