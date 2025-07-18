@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 
 from fastapi import FastAPI
@@ -6,10 +7,11 @@ from pydantic import BaseModel
 
 from modules.db.database import Database
 from modules.filters.filter_by_date import date_filter_range
-from modules.managers.report_manager import ReportManager
+from modules.interfaces.enums.ScannerTypes import ScannerTypes
+from modules.scanners.WapitiScanner import WapitiAdapter
+from services.ScannerEngine import ScannerEngine
+from services.managers.report_manager import ReportManager
 from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
-from modules.parsers.wapiti_parser import parse as wapiti_parse, parse
-from modules.scanners.wapiti_scan import scan as scan_wapiti
 from modules.utils.launch_tech_discovery import fetch_plugins_data, discover_then_volume, parse_volume_data
 
 # == TEST WEBSITES ==
@@ -32,6 +34,9 @@ class URL(BaseModel):
 
 @app.post("/api/v1/wapiti/scan")
 async def wapiti_scan(url: URL):
+    time_start = time.perf_counter()
+    _wapiti_scanner = WapitiAdapter()
+    scannerEngine = ScannerEngine()
     _URL = url.url
     # == testing code ==
     isLocal = False
@@ -40,19 +45,20 @@ async def wapiti_scan(url: URL):
         isLocal = True
         local_url = _URL.replace("localhost", "host.docker.internal")
     # == testing end ==
-    print(_URL)
     _scan_start = datetime.now()
-    _report_manager.generate(_scan_start.strftime("%Y%m%d_%I-%M-%S"))
-    path = _report_manager.build()
-    scan_wapiti(_URL, path)
-    parsed = wapiti_parse(path)
+    scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
+    path = scannerEngine.generate_path(ScannerTypes.WAPITI)
+    _wapiti_scanner.start_scan({"url": _URL, "path": path })
+    parsed = _wapiti_scanner.parse_results(path)
+    print(isLocal)
     if isLocal:
         await discover_then_volume(local_url)
     else:
         await discover_then_volume(_URL)
     raw_plugins = fetch_plugins_data()
     plugins = parse_volume_data()
-    _db.insert_wapiti_quick_report(_scan_start, path, raw_plugins)
+    time_end = time.perf_counter()
+    _db.insert_wapiti_quick_report(_scan_start, path, raw_plugins, (time_end - time_start))
     return {"data": parsed, "plugins": plugins}
 
 @app.get("/api/v1/whatweb/scan")

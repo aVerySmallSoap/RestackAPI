@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import time
@@ -72,9 +71,3 @@ def test_passive():
         writable.write(json.dumps(zap.core.alerts()))
         writable.flush()
         writable.close()
-
-async def test():
-    await run_container(apiKey)
-    test_explore()
-    test_active()
-    print(zap.reports.generate(title="test", template="traditional-json", sites=target))

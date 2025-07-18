@@ -1,6 +1,5 @@
 from datetime import datetime
 
-#TODO: Complete this report manager
 class ReportManager:
     """Manages the naming and local paths of generated reports."""
     _local_path:str = "reports/" # Reference path in which reports are stored

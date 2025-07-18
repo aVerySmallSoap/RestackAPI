@@ -43,11 +43,13 @@ def parse_mount_data():
 def parse_volume_data():
     with open(_local_report_path, "r") as f:
         data = json.load(f)
-        data = data[0]
-        plugins = []
-        for key, value in data["plugins"].items():
-            plugins.append({key: value})
-        return plugins
+        if len(data) > 0:
+            data = data[0]
+            plugins = []
+            for key, value in data["plugins"].items():
+                plugins.append({key: value})
+            return plugins
+        return data
 
 def fetch_plugins_data() -> list:
     with open(_local_report_path, "r") as f:
