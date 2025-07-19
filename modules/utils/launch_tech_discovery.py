@@ -11,11 +11,10 @@ from modules.utils.load_env import ENV
 # TODO: allow a scan from python (API) to a container
 
 _local_report_path = "./temp/whatweb/report.json"
-client = docker.from_env()
-
 async def discover_then_volume(url:str):
     """Launches a docker container that utilizes the volume flag to store a whatweb report."""
     _sanitize_report()
+    client = docker.from_env()
     client.containers.run("whatweb",
                           ["./whatweb", "-a 3", "--log-json=./reports/report.json", url],
                           volumes={
@@ -26,6 +25,7 @@ async def discover_then_volume(url:str):
 async def discover_then_mount(url:str):
     """Launches a docker container that utilizes the mount flag to store a whatweb report."""
     _sanitize_report()
+    client = docker.from_env()
     client.containers.run("whatweb",
                           ["./whatweb", "-a 3", "--log-json=./reports/report.json", url],
                           mounts=[Mount("/src/whatweb/reports", "/temp/reports")],

@@ -1,6 +1,12 @@
 {
-  "report_paths": {
-    "whatweb": "C\\Users\\Public\\Documents\\restack\\reports\\whatweb",
-    "zap": "C\\Users\\Public\\Documents\\restack\\reports\\zap"
+  "templates_path": {
+    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\config\\templates\\wapiti_config.json",
+    "whatweb": "",
+    "zap": ""
+  },
+  "report_paths" : {
+    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports",
+    "whatweb": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\whatweb",
+    "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap"
   }
 }

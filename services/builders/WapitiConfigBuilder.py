@@ -5,7 +5,7 @@ from modules.utils.load_env import ENV
 
 class WapitiConfigBuilder(IConfigBuilder):
     _args:list[str] = ["-u", "-m", "-o", "-S", "--max-scan-time", "--tasks"]
-    _commands:list[str] = ["wapiti", "-v", "0", "-f", "json", "-l", "1"]
+    _commands:list[str] = ["wapiti", "-v", "0", "-f", "json", "-l", "1", "--flush-session","--headless", "hidden", "--mitm-port", "9600"]
 
     #== Configurable ==
     _url: str = None # Flag: -u !!REQUIRED

@@ -13,8 +13,8 @@ class Report(Base):
     scanner: Mapped[str] = mapped_column(String(50))
     scan_type: Mapped[str] = mapped_column(String(50))
     path: Mapped[str]
-    total_vulnerabilities: Mapped[int] = mapped_column(nullable=True) # Non-nullable | remove after parsing is implemented
-    critical_count: Mapped[int] = mapped_column(nullable=True) # Non-nullable | remove after parsing is implemented
+    total_vulnerabilities: Mapped[int]
+    critical_count: Mapped[int]
     scan = relationship("Scan", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
     tech = relationship("TechDiscovery", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
 
@@ -36,7 +36,7 @@ class Scan(Base):
     scanner: Mapped[str] = mapped_column(String(50))
     scan_type: Mapped[str] = mapped_column(String(50))
     scan_duration: Mapped[float]
-    crawl_depth: Mapped[int] = mapped_column(nullable=True) # remove later
+    crawl_depth: Mapped[int]
     target_url: Mapped[str]
     data = Column(JSON)
     parent = relationship("Report", back_populates="scan")
@@ -50,9 +50,9 @@ class Vulnerability(Base):
     scanner: Mapped[str] = mapped_column(String(50))
     vulnerability_type: Mapped[str] = mapped_column(String(100))
     severity:Mapped[str] = mapped_column(String(50))
+    info:Mapped[str]
     endpoint: Mapped[str]
-    false_positive: Mapped[bool]
-    remediation_effort: Mapped[str] = mapped_column(String(50))
+    remediation_effort: Mapped[str]
     http_method: Mapped[str]
-    parameters = Column(JSON)
+    parameters = Mapped[str]
     data = Column(JSON)
