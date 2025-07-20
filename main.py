@@ -9,13 +9,18 @@ from modules.db.database import Database
 from modules.filters.filter_by_date import date_filter_range
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
+from modules.scanners.ZapScanner import ZapAdapter
 from services.ScannerEngine import ScannerEngine
 from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
 from modules.utils.launch_tech_discovery import fetch_plugins_data, discover_then_volume, parse_volume_data
+from services.managers.DockerManager import DockerManager
+from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 
 # == TEST WEBSITES ==
 # https://public-firing-range.appspot.com
 _db = Database()
+_docker_manager = DockerManager()
+_docker_manager.start_manual_zap_service({"apikey": "test"})
 
 app = FastAPI()
 app.add_middleware(
@@ -24,17 +29,17 @@ app.add_middleware(
     allow_methods=["*"],
 )
 
-class URL(BaseModel):
+class ScanRequest(BaseModel):
     url:AnyUrl
 
 # TODO: Check if reports folder is present in CWD
 
 @app.post("/api/v1/wapiti/scan")
-async def wapiti_scan(url: URL):
+async def wapiti_scan(request: ScanRequest) -> dict:
     time_start = time.perf_counter()
     _wapiti_scanner = WapitiAdapter()
     scannerEngine = ScannerEngine()
-    _URL = str(url.url)
+    _URL = str(request.url)
     # == testing code ==
     isLocal = False
     local_url = ""
@@ -55,15 +60,41 @@ async def wapiti_scan(url: URL):
     raw_plugins = fetch_plugins_data()
     plugins = parse_volume_data()
     time_end = time.perf_counter()
-    _db.insert_wapiti_quick_report(_scan_start, path, raw_plugins, report, (time_end - time_start))
-    return {"data": report["parsed"], "extra": report["extra"], "plugins": plugins}
+    scan_time = time_end - time_start
+    _db.insert_wapiti_quick_report(_scan_start, path, raw_plugins, report, scan_time)
+    return {"data": report["parsed"], "extra": report["extra"], "plugins": plugins, "scan_time": scan_time}
+
+@app.post("/api/v1/scan/zap/passive")
+async def zap_passive_scan(request: ScanRequest) -> dict:
+    time_start = time.perf_counter()
+    _zap_scanner = ZapAdapter({"apikey": "test"})
+    _scannerEngine = ScannerEngine()
+    _URL = str(request.url)
+    # == testing code ==
+    isLocal = False
+    local_url = ""
+    if _URL.__contains__("localhost") or _URL.__contains__("127.0.0.1"):
+        isLocal = True
+        local_url = _URL.replace("localhost", "host.docker.internal")
+    # == testing end ==
+    _scan_start = datetime.now()
+    _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
+    path = _scannerEngine.generate_path(ScannerTypes.ZAP)
+    if isLocal:
+        _zap_scanner.start_scan({"url": local_url, "path": path, "scan_type": ZAPScanTypes.PASSIVE})
+    else:
+        _zap_scanner.start_scan({"url": _URL, "path": path})
+    report = _zap_scanner.parse_results(path)
+    time_end = time.perf_counter()
+    scan_time = time_end - time_start
+    return {"data": report["raw"], "scan_time": scan_time}
 
 @app.get("/api/v1/whatweb/scan")
 async def whatweb_scan(url: str):
     pass
 
 @app.get("/api/v1/wapiti/report/{report_id}")
-async def wapiti_report(report_id: str):
+async def wapiti_report(report_id: str) -> dict:
     return parse(fetch_reports(report_id))
 
 @app.get("/api/v1/history/fetch")

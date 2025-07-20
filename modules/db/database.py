@@ -65,7 +65,7 @@ class Database:
                 data=raw_data["parsed"],
                 crawl_depth=raw_data["extra"]["crawled_pages_nbr"],
                 scan_duration=floor(duration),
-                target_url=file_path
+                target_url=raw_data["extra"]["target"]
             )
             _tables.append(tech_disc)
             _tables.append(scan)
