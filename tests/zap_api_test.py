@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -18,7 +19,6 @@ async def run_container(apikey:str):
                           name="zap",
                           volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\zap": {"bind": "/home/zap", "mode": "rw"}},
                           ports={"8080/tcp": 8080},
-                          auto_remove=True,
                           detach=True)
 
 #create temporary file
@@ -26,12 +26,18 @@ if not os.path.isfile("../temp/zap/report.json"):
     open("../temp/zap/report.json", "x").close()
 
 # localhost test use: host.docker.internal
-target = 'http://host.docker.internal:25565'
+target = 'http://host.docker.internal:8000'
 zap = ZAPv2(apikey=apiKey)
 
 def test_explore():
+    print(f"Spider target: {target}")
+    scanID = zap.spider.scan(target, recurse=True)
+    while int(zap.spider.status(scanID)) < 100:
+        print(f"Spider status %{zap.spider.status(scanID)}")
+        time.sleep(2)
+
     print(f'Ajax spider target: {target}')
-    zap.ajaxSpider.scan(target)
+    zap.ajaxSpider.scan(target, inscope=False)
     timeout = time.time() + 60 * 2
     while zap.ajaxSpider.status == "running":
         if time.time() > timeout:
@@ -42,7 +48,7 @@ def test_explore():
     print(f"Ajax spider completed")
     ajaxResults = zap.ajaxSpider.results()
 
-    with open("../temp/zap/report.json", "w") as writable:
+    with open("../temp/zap/explore_report.json", "w") as writable:
         writable.write(json.dumps(ajaxResults))
         writable.flush()
         writable.close()
@@ -55,6 +61,7 @@ def test_active():
         time.sleep(5)
 
     print(f"Active Scanning completed")
+    print(zap.core.alerts(baseurl=target))
     with open("../temp/zap/report.json", "w") as writable:
         writable.write(json.dumps(zap.core.alerts(baseurl=target)))
         writable.flush()
@@ -71,3 +78,14 @@ def test_passive():
         writable.write(json.dumps(zap.core.alerts()))
         writable.flush()
         writable.close()
+
+async def test():
+    client = docker.from_env()
+    await run_container("test")
+    time.sleep(20) # wait for zap to load in docker
+    for container in client.containers.list():
+        if container.name == "zap":
+            test_explore()
+            test_active()
+
+asyncio.run(test())

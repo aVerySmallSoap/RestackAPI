@@ -10,5 +10,8 @@ class ZAPScanner(IScannerAdapter):
     def generate_config(self, user_config: dict) -> dict:
         pass
 
-    def parse_results(self) -> dict:
+    def parse_results(self, path:str) -> dict:
+        pass
+
+    def _context_lookup(self):
         pass
