@@ -16,7 +16,7 @@ async def discover_then_volume(url:str):
     _sanitize_report()
     client = docker.from_env()
     client.containers.run("whatweb",
-                          ["./whatweb", "-a 3", "--log-json=./reports/report.json", url],
+                          ["./whatweb", "-a 1", "--verbose", "--log-json=./reports/report.json", url],
                           volumes={
                               ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                           auto_remove=True,

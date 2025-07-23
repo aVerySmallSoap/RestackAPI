@@ -50,9 +50,10 @@ class Vulnerability(Base):
     scanner: Mapped[str] = mapped_column(String(50))
     vulnerability_type: Mapped[str] = mapped_column(String(100))
     severity:Mapped[str] = mapped_column(String(50))
+    confidence:Mapped[str] = mapped_column(String(25))
+    params:Mapped[str]
     info:Mapped[str]
     endpoint: Mapped[str]
     remediation_effort: Mapped[str]
-    http_method: Mapped[str]
-    parameters = Mapped[str]
+    method: Mapped[str]
     data = Column(JSON)

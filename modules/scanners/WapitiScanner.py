@@ -64,6 +64,7 @@ class WapitiAdapter(IScannerAdapter):
             for category in categories:
                 _arr = []
                 for vulnerability in wapiti_report["vulnerabilities"][category]:
+                    vulnerability.update({"name": category})
                     for key, value in vulnerability.items():  # Normalize levels into CVE standard format
                         if key == "level":
                             match value:
@@ -79,4 +80,4 @@ class WapitiAdapter(IScannerAdapter):
                         vulnerability.update({key: value})
                     _arr.append(vulnerability)
                 vulnerabilities.append(_arr)
-            return {"parsed":{"categories": categories, "descriptions": descriptions, "vulnerabilities": vulnerabilities}, "critical_vulnerabilities": _critical, "raw": wapiti_report, "extra": wapiti_report["infos"]}
+            return {"parsed":{"categories": categories, "descriptions": descriptions, "vulnerabilities": vulnerabilities}, "vulnerability_count": len(vulnerabilities),"critical_vulnerabilities": _critical, "raw": wapiti_report, "extra": wapiti_report["infos"]}

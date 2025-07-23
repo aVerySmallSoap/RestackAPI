@@ -60,7 +60,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     if isLocal:
         await discover_then_volume(local_url)
     else:
-        await discover_then_volume(str(_URL))
+        await discover_then_volume(_URL)
     raw_plugins = fetch_plugins_data()
     plugins = parse_volume_data()
     time_end = time.perf_counter()
@@ -84,13 +84,18 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
     path = _scannerEngine.generate_path(ScannerTypes.ZAP)
     if isLocal:
+        await discover_then_volume(local_url)
         _zap_scanner.start_scan({"url": local_url, "path": path, "scan_type": ZAPScanTypes.PASSIVE})
     else:
+        await discover_then_volume(_URL)
         _zap_scanner.start_scan({"url": _URL, "path": path})
+    raw_plugins = fetch_plugins_data()
+    plugins = parse_volume_data()
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    return {"data": report["raw"], "scan_time": scan_time}
+    _db.insert_zap_report(_scan_start, path, raw_plugins, report, scan_time)
+    return {"data": report["parsed"], "plugins": plugins, "scan_time": scan_time}
 
 @app.get("/api/v1/whatweb/scan")
 async def whatweb_scan(url: str):
