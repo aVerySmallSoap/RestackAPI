@@ -23,6 +23,7 @@ from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 _db = Database()
 _docker_manager = DockerManager()
 _docker_manager.start_manual_zap_service({"apikey": "test"})
+_scannerEngine = ScannerEngine()
 
 app = FastAPI()
 app.add_middleware(
@@ -42,7 +43,6 @@ class ScanRequest(BaseModel):
 async def wapiti_scan(request: ScanRequest) -> dict:
     time_start = time.perf_counter()
     _wapiti_scanner = WapitiAdapter()
-    scannerEngine = ScannerEngine()
     _URL = str(request.url)
     # == testing code ==
     isLocal = False
@@ -52,8 +52,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
         local_url = _URL.replace("localhost", "host.docker.internal")
     # == testing end ==
     _scan_start = datetime.now()
-    scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
-    path = scannerEngine.generate_path(ScannerTypes.WAPITI)
+    _scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
+    path = _scannerEngine.generate_path(ScannerTypes.WAPITI)
     config = _wapiti_scanner.generate_config({"url": _URL, "path": path, "modules": ["all"]})
     _wapiti_scanner.start_scan(config)
     report = _wapiti_scanner.parse_results(path)
@@ -72,7 +72,6 @@ async def wapiti_scan(request: ScanRequest) -> dict:
 async def zap_passive_scan(request: ScanRequest) -> dict:
     time_start = time.perf_counter()
     _zap_scanner = ZapAdapter({"apikey": "test"})
-    _scannerEngine = ScannerEngine()
     _URL = str(request.url)
     # == testing code ==
     isLocal = False

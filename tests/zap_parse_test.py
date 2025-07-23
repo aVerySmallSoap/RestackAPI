@@ -17,7 +17,9 @@ with open("../temp/zap/20250721_01-12-21.json") as f:
             if alert["name"] == zap_def:
                 alert["name"] = wap_def
 
-    #TODO: format these fields and write them to database
+    #TODO: format these fields and write them to database.
+    with open("../config/templates/zap_template.json", "r") as template:
+        _format = json.load(template)
     for alert in report:
         print(alert["name"])
         print(alert["risk"])
@@ -29,4 +31,4 @@ with open("../temp/zap/20250721_01-12-21.json") as f:
         print(alert["url"]) # TODO: find a way to filter out http(s)://base.domain and only output the endpoint i.e., /checkouts, /payments, etc.
         print(alert["solution"])
         print(alert["reference"])
-        print("-----\n")
+        print("-----\n") # May add the "tag" value in the future
