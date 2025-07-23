@@ -10,7 +10,8 @@ class WapitiAdapter(IScannerAdapter):
         configBuilder = WapitiConfigBuilder() # Valid configuration should be built on scan run time
         config = configBuilder.url(config["url"]).output_path(config["path"]).build()
         process = subprocess.Popen(config)
-        process.wait()
+        process.wait() #TODO: check if the scan errored in any way
+        #TODO: identify if the scan type is QUICK, FULL or CUSTOM using ScanTypes.py
 
     def stop_scan(self, scan_id:str|int) -> int:
         pass

@@ -18,6 +18,8 @@ from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 
 # == TEST WEBSITES ==
 # https://public-firing-range.appspot.com
+# https://github.com/WebGoat/WebGoat
+# https://github.com/juice-shop/juice-shop
 _db = Database()
 _docker_manager = DockerManager()
 _docker_manager.start_manual_zap_service({"apikey": "test"})
@@ -33,6 +35,8 @@ class ScanRequest(BaseModel):
     url:AnyUrl
 
 # TODO: Check if reports folder is present in CWD
+# NOTE! THIS SHOULD BE DEVELOPED WITH SPECIALIZATION IN MIND. THIS APP SHOULD NOT BE GENERALIZED TO SPEED UP DEVELOPMENT
+# CONSIDERATIONS ARE TO LIMIT SCANS TO ORGANIZATION SPECIFIC WEBSITES SUCH AS http://www.mywebsite.com or https://my.personal.site
 
 @app.post("/api/v1/wapiti/scan")
 async def wapiti_scan(request: ScanRequest) -> dict:
