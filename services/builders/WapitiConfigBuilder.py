@@ -1,6 +1,6 @@
 from modules.interfaces.builders.IConfigBuilder import IConfigBuilder
 from modules.interfaces.enums.WapitiArguments import WapitiArgs
-from modules.utils.load_env import ENV
+from modules.utils.load_configs import ENV
 
 
 class WapitiConfigBuilder(IConfigBuilder):

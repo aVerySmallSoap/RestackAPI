@@ -9,10 +9,10 @@ from modules.db.database import Database
 from modules.filters.filter_by_date import date_filter_range
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
+from modules.scanners.WhatWebAdapter import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from services.ScannerEngine import ScannerEngine
 from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
-from modules.utils.launch_tech_discovery import fetch_plugins_data, discover_then_volume, parse_volume_data
 from services.managers.DockerManager import DockerManager
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 
@@ -43,6 +43,7 @@ class ScanRequest(BaseModel):
 async def wapiti_scan(request: ScanRequest) -> dict:
     time_start = time.perf_counter()
     _wapiti_scanner = WapitiAdapter()
+    _whatweb_scanner = WhatWebAdapter()
     _URL = str(request.url)
     # == testing code ==
     isLocal = False
@@ -54,24 +55,24 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     _scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
     path = _scannerEngine.generate_path(ScannerTypes.WAPITI)
-    config = _wapiti_scanner.generate_config({"url": _URL, "path": path, "modules": ["all"]})
-    _wapiti_scanner.start_scan(config)
+    config = _wapiti_scanner.generate_config({"path": path, "modules": ["all"]})
+    _wapiti_scanner.start_scan(_URL, config)
     report = _wapiti_scanner.parse_results(path)
     if isLocal:
-        await discover_then_volume(local_url)
+        await _whatweb_scanner.start_scan(local_url)
     else:
-        await discover_then_volume(_URL)
-    raw_plugins = fetch_plugins_data()
-    plugins = parse_volume_data()
+        await _whatweb_scanner.start_scan(_URL)
+    _whatweb_results = _whatweb_scanner.parse_results()
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    _db.insert_wapiti_quick_report(_scan_start, path, raw_plugins, report, scan_time)
-    return {"data": report["parsed"], "extra": report["extra"], "plugins": plugins, "scan_time": scan_time}
+    _db.insert_wapiti_quick_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    return {"data": report["parsed"], "extra": report["extra"], "plugins": _whatweb_results["parsed"], "scan_time": scan_time}
 
 @app.post("/api/v1/scan/zap/passive")
 async def zap_passive_scan(request: ScanRequest) -> dict:
     time_start = time.perf_counter()
     _zap_scanner = ZapAdapter({"apikey": "test"})
+    _whatweb_scanner = WhatWebAdapter()
     _URL = str(request.url)
     # == testing code ==
     isLocal = False
@@ -84,18 +85,17 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
     path = _scannerEngine.generate_path(ScannerTypes.ZAP)
     if isLocal:
-        await discover_then_volume(local_url)
+        await _whatweb_scanner.start_scan(local_url)
         _zap_scanner.start_scan({"url": local_url, "path": path, "scan_type": ZAPScanTypes.PASSIVE})
     else:
-        await discover_then_volume(_URL)
+        await _whatweb_scanner.start_scan(_URL)
         _zap_scanner.start_scan({"url": _URL, "path": path})
-    raw_plugins = fetch_plugins_data()
-    plugins = parse_volume_data()
+    _whatweb_results = _whatweb_scanner.parse_results()
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    _db.insert_zap_report(_scan_start, path, raw_plugins, report, scan_time)
-    return {"data": report["parsed"], "plugins": plugins, "scan_time": scan_time}
+    _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    return {"data": report["parsed"], "plugins": _whatweb_results["parsed"], "scan_time": scan_time}
 
 @app.get("/api/v1/whatweb/scan")
 async def whatweb_scan(url: str):

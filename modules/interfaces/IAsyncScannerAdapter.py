@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 
-class IScannerAdapter(ABC):
+class IAsyncScannerAdapter(ABC):
+    """Same as the IScannerAdapter interface but some of its methods are awaitable"""
     @abstractmethod
-    def start_scan(self, config: dict, url:str):
+    async def start_scan(self, config: dict, url:str):
         pass
 
     @abstractmethod

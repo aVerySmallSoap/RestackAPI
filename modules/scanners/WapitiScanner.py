@@ -2,13 +2,13 @@ import json
 import subprocess
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
-from modules.utils.load_env import ENV
+from modules.utils.load_configs import ENV
 from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 
 class WapitiAdapter(IScannerAdapter):
-    def start_scan(self, config: dict):
-        configBuilder = WapitiConfigBuilder() # Valid configuration should be built on scan run time
-        config = configBuilder.url(config["url"]).output_path(config["path"]).build()
+    def start_scan(self, url:str, config: dict = None):
+        configBuilder = WapitiConfigBuilder()
+        config = configBuilder.url(url).output_path(config["path"]).build()
         process = subprocess.Popen(config)
         process.wait() #TODO: check if the scan errored in any way
         #TODO: identify if the scan type is QUICK, FULL or CUSTOM using ScanTypes.py
@@ -48,24 +48,19 @@ class WapitiAdapter(IScannerAdapter):
     def parse_results(self, path:str) -> dict:
         with open(path, "r") as report:
             wapiti_report = json.load(report)
-            categories = []
-            descriptions = []
-            vulnerabilities = []
+            categories, descriptions, vulnerabilities = [], [], []
             _critical = 0
-            # Fetch categories that only have vulnerabilities and retrieve their description and mitigations
-            for category in wapiti_report["vulnerabilities"]:
+            for category in wapiti_report["vulnerabilities"]: # Fetch categories that only have vulnerabilities and retrieve their description and mitigations
                 if len(wapiti_report["vulnerabilities"][category]) != 0:
                     categories.append(category)
-            # Get description of each category
-            for category, data in wapiti_report["classifications"].items():
+            for category, data in wapiti_report["classifications"].items(): # Get description of each category
                 if category in categories:
                     descriptions.append(data)
-            # Get vulnerabilities
-            for category in categories:
+            for category in categories: # Get vulnerabilities
                 _arr = []
                 for vulnerability in wapiti_report["vulnerabilities"][category]:
                     vulnerability.update({"name": category})
-                    for key, value in vulnerability.items():  # Normalize levels into CVE standard format
+                    for key, value in vulnerability.items():
                         if key == "level":
                             match value:
                                 case 1:

@@ -2,7 +2,7 @@ import queue
 import datetime
 
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
-from modules.utils.load_env import ENV
+from modules.utils.load_configs import ENV
 
 
 class Singleton(type):
