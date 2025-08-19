@@ -18,12 +18,12 @@ class ZapAdapter(IScannerAdapter):
     def __init__(self, config: dict):
         self.zap = ZAPv2(apikey=config["apikey"])
 
-    def start_scan(self, config: dict):
-        self._context_lookup(config["url"])
+    def start_scan(self, url:str, config: dict):
+        self._context_lookup(url)
         if config["scan_type"] == ZAPScanTypes.PASSIVE:
-            self._start_passive_scan(config["url"], config["path"])
+            self._start_passive_scan(url, config["path"])
         elif config["scan_type"] == ZAPScanTypes.ACTIVE:
-            self._start_active_scan(config["url"], config["path"])
+            self._start_active_scan(url, config["path"])
 
     def stop_scan(self, scan_id: str | int) -> int:
         pass

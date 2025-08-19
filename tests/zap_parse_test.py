@@ -2,14 +2,17 @@ import json
 import urllib.parse
 from pprint import pprint
 
-redefinitions = json.load(open("../config/templates/zap_to_wapiti.json", "r"))
+from modules.utils.load_configs import ZAP_MAPPING
+
+# TODO: Finish this module
+# TODO: Move this from tests after finishing
 
 with open("../temp/zap/20250723_05-58-51.json") as f:
     report = json.load(f)
 
     #Redifine names so some vulnerabilities have the same definition
     for alert in report:
-        for wap_def, zap_def in redefinitions.items():
+        for wap_def, zap_def in ZAP_MAPPING.items():
             if type(zap_def) is dict:
                 for definition in zap_def:
                     if alert["name"] == definition:

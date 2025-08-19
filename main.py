@@ -6,13 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, AnyUrl
 
 from modules.db.database import Database
-from modules.filters.filter_by_date import date_filter_range
+from modules.db.filters.filter_by_date import date_filter_range
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebAdapter import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from services.ScannerEngine import ScannerEngine
-from modules.parsers.history_parser import history_parse, fetch_report, fetch_reports
+from modules.parsers.history_parser import history_parse, fetch_report
 from services.managers.DockerManager import DockerManager
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 
@@ -20,6 +20,8 @@ from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 # https://public-firing-range.appspot.com
 # https://github.com/WebGoat/WebGoat
 # https://github.com/juice-shop/juice-shop
+# ===================
+
 _db = Database()
 _docker_manager = DockerManager()
 _docker_manager.start_manual_zap_service({"apikey": "test"})
@@ -86,10 +88,10 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     path = _scannerEngine.generate_path(ScannerTypes.ZAP)
     if isLocal:
         await _whatweb_scanner.start_scan(local_url)
-        _zap_scanner.start_scan({"url": local_url, "path": path, "scan_type": ZAPScanTypes.PASSIVE})
+        _zap_scanner.start_scan(local_url, {"path": path, "scan_type": ZAPScanTypes.PASSIVE})
     else:
         await _whatweb_scanner.start_scan(_URL)
-        _zap_scanner.start_scan({"url": _URL, "path": path})
+        _zap_scanner.start_scan(_URL, {"path": path})
     _whatweb_results = _whatweb_scanner.parse_results()
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
@@ -97,13 +99,9 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
     return {"data": report["parsed"], "plugins": _whatweb_results["parsed"], "scan_time": scan_time}
 
-@app.get("/api/v1/whatweb/scan")
-async def whatweb_scan(url: str):
-    pass
-
 @app.get("/api/v1/wapiti/report/{report_id}")
 async def wapiti_report(report_id: str) -> dict:
-    return parse(fetch_reports(report_id))
+    pass
 
 @app.get("/api/v1/history/fetch")
 async def history_fetch():
