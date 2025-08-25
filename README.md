@@ -31,3 +31,6 @@ Restack mainly targets developers who have a keen interest in learning cybersecu
 > [!NOTE]
 > 
 > This project is heavily inspired by the tools like OWASP's [SecureCodeBox](https://github.com/secureCodeBox/secureCodeBox)
+
+
+This project is aimed to be deployed at ***REDACTED*** as part of a capstone project
