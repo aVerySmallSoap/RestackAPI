@@ -2,7 +2,7 @@ import queue
 import datetime
 
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
-from modules.utils.load_configs import ENV
+from modules.utils.load_configs import DEV_ENV
 
 
 class Singleton(type):
@@ -19,9 +19,9 @@ class ScannerEngine(metaclass=Singleton):
     _NameQueue = queue.Queue(maxsize=5)
 
     # == Report paths ==
-    _wapiti_path = ENV["report_paths"]["wapiti"]
-    _whatweb_path = ENV["report_paths"]["whatweb"]
-    _zap_path = ENV["report_paths"]["zap"]
+    _wapiti_path = DEV_ENV["report_paths"]["wapiti"]
+    _whatweb_path = DEV_ENV["report_paths"]["whatweb"]
+    _zap_path = DEV_ENV["report_paths"]["zap"]
 
     def enqueue_session(self, scanner_type: ScannerTypes, start_time: datetime):
         # TODO: write to session database

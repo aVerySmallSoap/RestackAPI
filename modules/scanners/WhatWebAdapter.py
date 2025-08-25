@@ -4,7 +4,7 @@ import os
 import docker
 
 from modules.interfaces.IAsyncScannerAdapter import IAsyncScannerAdapter
-from modules.utils.load_configs import ENV
+from modules.utils.load_configs import DEV_ENV
 
 
 class WhatWebAdapter(IAsyncScannerAdapter):
@@ -28,10 +28,10 @@ class WhatWebAdapter(IAsyncScannerAdapter):
     async def discover_then_volume(self, url: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
-        client.containers.run("whatweb",
+        client.containers.run("iamyourdev/whatweb",
                               ["./whatweb", "-a 1", "--verbose", "--log-json=./reports/report.json", url],
                               volumes={
-                                  ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
+                                  DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True,
                               name="whatweb")
 

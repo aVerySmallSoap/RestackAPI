@@ -2,7 +2,7 @@
 # https://github.com/guikcd/docker-whatweb/blob/master/0.5.5-alpine/Dockerfile
 FROM ruby:2.7-alpine AS builder
 
-ENV WHATWEB_VERSION v0.5.5
+ENV WHATWEB_VERSION=v0.6.1
 
 RUN apk --no-cache add git make gcc musl-dev sudo
 RUN git clone --branch $WHATWEB_VERSION https://github.com/urbanadventurer/WhatWeb.git /src/whatweb

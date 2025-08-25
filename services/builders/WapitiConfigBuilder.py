@@ -1,6 +1,6 @@
 from modules.interfaces.builders.IConfigBuilder import IConfigBuilder
 from modules.interfaces.enums.WapitiArguments import WapitiArgs
-from modules.utils.load_configs import ENV
+from modules.utils.load_configs import DEV_ENV
 
 
 class WapitiConfigBuilder(IConfigBuilder):
@@ -31,7 +31,7 @@ class WapitiConfigBuilder(IConfigBuilder):
         self._modules = modules
         return self
 
-    def output_path(self, path: str = f"{ENV["report_paths"]["wapiti"]}\\report.json"):
+    def output_path(self, path: str = f"{DEV_ENV["report_paths"]["wapiti"]}\\report.json"):
         self._path = path
         return self
 

@@ -2,7 +2,7 @@ import json
 import subprocess
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
-from modules.utils.load_configs import ENV
+from modules.utils.load_configs import DEV_ENV
 from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 
 class WapitiAdapter(IScannerAdapter):
@@ -18,7 +18,7 @@ class WapitiAdapter(IScannerAdapter):
 
     def generate_config(self, user_config: dict) -> dict:
         """Generate a config object from an HTTP request."""
-        with open(ENV["templates_path"]["wapiti"], "r") as file: #TODO: check if files exists
+        with open(DEV_ENV["templates_path"]["wapiti"], "r") as file: #TODO: check if files exists
             _template = json.load(file)
             if len(user_config) == 0:
                 return {"error": "Invalid config: Configuration empty!"}

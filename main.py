@@ -12,8 +12,8 @@ from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebAdapter import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from services.ScannerEngine import ScannerEngine
-from modules.parsers.history_parser import history_parse, fetch_report
-from services.managers.DockerManager import DockerManager
+from modules.parsers.history_parser import history_parse
+from modules.utils.docker_utils import start_manual_zap_service
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 
 # == TEST WEBSITES ==
@@ -23,8 +23,7 @@ from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 # ===================
 
 _db = Database()
-_docker_manager = DockerManager()
-_docker_manager.start_manual_zap_service({"apikey": "test"})
+start_manual_zap_service({"apikey": "test"})
 _scannerEngine = ScannerEngine()
 
 app = FastAPI()

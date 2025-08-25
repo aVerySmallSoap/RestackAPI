@@ -2,7 +2,7 @@ import json
 import urllib.parse
 from pprint import pprint
 
-from modules.utils.load_configs import ZAP_MAPPING
+from modules.utils.load_configs import DEV_ZAP_MAPPING
 
 # TODO: Finish this module
 # TODO: Move this from tests after finishing
@@ -12,7 +12,7 @@ with open("../temp/zap/20250723_05-58-51.json") as f:
 
     #Redifine names so some vulnerabilities have the same definition
     for alert in report:
-        for wap_def, zap_def in ZAP_MAPPING.items():
+        for wap_def, zap_def in DEV_ZAP_MAPPING.items():
             if type(zap_def) is dict:
                 for definition in zap_def:
                     if alert["name"] == definition:
