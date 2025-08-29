@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, AnyUrl
+from sqlalchemy.util.typing import is_literal
 
 from modules.db.database import Database
 from modules.db.filters.filter_by_date import date_filter_range
@@ -47,10 +48,10 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _whatweb_scanner = WhatWebAdapter()
     _URL = str(request.url)
     # == testing code ==
-    isLocal = False
+    is_local = False
     local_url = ""
     if _URL.__contains__("localhost") or _URL.__contains__("127.0.0.1"):
-        isLocal = True
+        is_local = True
         local_url = _URL.replace("localhost", "host.docker.internal")
     # == testing end ==
     _scan_start = datetime.now()
@@ -59,7 +60,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     config = _wapiti_scanner.generate_config({"path": path, "modules": ["all"]})
     _wapiti_scanner.start_scan(_URL, config)
     report = _wapiti_scanner.parse_results(path)
-    if isLocal:
+    if is_local:
         await _whatweb_scanner.start_scan(local_url)
     else:
         await _whatweb_scanner.start_scan(_URL)
@@ -76,16 +77,16 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _whatweb_scanner = WhatWebAdapter()
     _URL = str(request.url)
     # == testing code ==
-    isLocal = False
+    is_local = False
     local_url = ""
     if _URL.__contains__("localhost") or _URL.__contains__("127.0.0.1"):
-        isLocal = True
+        is_local = True
         local_url = _URL.replace("localhost", "host.docker.internal")
     # == testing end ==
     _scan_start = datetime.now()
     _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
     path = _scannerEngine.generate_path(ScannerTypes.ZAP)
-    if isLocal:
+    if is_local:
         await _whatweb_scanner.start_scan(local_url)
         _zap_scanner.start_scan(local_url, {"path": path, "scan_type": ZAPScanTypes.PASSIVE})
     else:

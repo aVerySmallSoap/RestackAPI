@@ -15,9 +15,11 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         await self.discover_then_volume(url)
 
     def stop_scan(self, scan_id: str | int) -> int:
+        """TBD"""
         pass
 
     def generate_config(self, user_config: dict) -> dict:
+        """TBD"""
         pass
 
     def parse_results(self, path: str = None) -> dict:

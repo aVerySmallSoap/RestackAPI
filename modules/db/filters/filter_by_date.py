@@ -35,8 +35,8 @@ def date_filter_week(connection:Engine, upperbound:str = None):
         _reports = []
         _results = session.execute(select(Report).where(Report.scan_date >= lowerbound_date, Report.scan_date <= upperbound)).all()
         if len(_results) == 0:
-            print("No results found.")
-            return {"message": "No results found"}
+            _message = "No results found"
+            return {"message": _message}
         for row in _results:
             _temp = {}
             for report in row:

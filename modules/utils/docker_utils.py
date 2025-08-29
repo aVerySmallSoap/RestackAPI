@@ -16,7 +16,9 @@ def start_manual_zap_service(config: dict):
                               detach=True)
 
 def start_automatic_zap_service(self, config: dict):
+    """TBD"""
     pass
 
 def start_whatweb_service(self, config: dict | None):
+    """TBD"""
     pass

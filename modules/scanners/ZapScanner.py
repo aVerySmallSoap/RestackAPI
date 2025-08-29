@@ -26,16 +26,17 @@ class ZapAdapter(IScannerAdapter):
             self._start_active_scan(url, config["path"])
 
     def stop_scan(self, scan_id: str | int) -> int:
+        """TBD"""
         pass
 
     def generate_config(self, user_config: dict) -> dict:
+        """TBD"""
         pass
 
+    # TODO: No error handling
     def parse_results(self, path:str) -> dict:
-        #TODO: No error handling
         with open(path, "r") as report:
             zap_report = json.load(report)
-
             # Redefine names so some vulnerabilities have the same definition
             for alert in zap_report:
                 for wap_def, zap_def in self._redefinitions.items():

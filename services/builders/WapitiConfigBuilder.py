@@ -1,3 +1,5 @@
+from typing import Optional
+
 from modules.interfaces.builders.IConfigBuilder import IConfigBuilder
 from modules.interfaces.enums.WapitiArguments import WapitiArgs
 from modules.utils.load_configs import DEV_ENV
@@ -8,13 +10,13 @@ class WapitiConfigBuilder(IConfigBuilder):
     _commands:list[str] = ["wapiti", "-v", "0", "-f", "json", "-l", "2", "--flush-session","--headless", "hidden"]
 
     #== Configurable ==
-    _url: str = None # Flag: -u !!REQUIRED
-    _modules: list[str] = None # Flag: -m
-    _path: str = None # Flag: -o
-    _scan: str = None # Flag: -S | Scan aggression type
-    _scan_time: str = None # Flag: --max-scan-time
-    _concurrent_tasks: str = None # Flag: --tasks
-    _custom_args: list[str] = None #TODO: Check if passed arguments execute arbitrary code
+    _url: Optional[str] = None # Flag: -u !!REQUIRED
+    _modules: Optional[list[str]] = None # Flag: -m
+    _path: Optional[str] = None # Flag: -o
+    _scan: Optional[str] = None # Flag: -S | Scan aggression type
+    _scan_time: Optional[str] = None # Flag: --max-scan-time
+    _concurrent_tasks: Optional[str] = None # Flag: --tasks
+    _custom_args: Optional[list[str]] = None
     _is_overridden: bool = False # Check if the user overrides with special custom arguments
 
     #== validation ==
@@ -70,7 +72,9 @@ class WapitiConfigBuilder(IConfigBuilder):
             self._invalid_args.append(WapitiArgs.CONCURRENT_TASKS)
         return len(self._invalid_args) == 0
 
+    # TODO: Check if passed arguments execute arbitrary code
     def _validate_custom_args(self) -> bool:
+        """TBD"""
         pass
 
     def _set_defaults(self):

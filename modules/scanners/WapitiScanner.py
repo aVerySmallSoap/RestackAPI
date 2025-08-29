@@ -11,8 +11,8 @@ class WapitiAdapter(IScannerAdapter):
     # TODO: check if the scan errored in any way
     # TODO: identify if the scan type is QUICK, FULL or CUSTOM using ScanTypes.py
     def start_scan(self, url:str, config: dict = None):
-        configBuilder = WapitiConfigBuilder()
-        config = configBuilder.url(url).output_path(config["path"]).build()
+        config_builder = WapitiConfigBuilder()
+        config = config_builder.url(url).output_path(config["path"]).build()
         process = subprocess.Popen(config)
         process.wait()
 
