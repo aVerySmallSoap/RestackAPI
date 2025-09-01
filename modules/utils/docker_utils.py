@@ -15,10 +15,20 @@ def start_manual_zap_service(config: dict):
                               ports={"8080/tcp": 8080},
                               detach=True)
 
-def start_automatic_zap_service(self, config: dict):
+def start_automatic_zap_service(config: dict):
     """TBD"""
     pass
 
-def start_whatweb_service(self, config: dict | None):
+def start_whatweb_service(config: dict | None):
     """TBD"""
+    pass
+
+def update_vuln_search_service():
+    """Updates the search_vuln database in docker"""
+    client = docker.from_env()
+    client.containers.run("search_vulns", auto_remove=True, tty=True, command=["./search_vulns.py", "-u"])
+
+def vuln_search_query(technology: str|list[str]):
+    """Queries vulnerabilities found in a fingerprinted technology.
+    :param technology: a technology or list of technologies"""
     pass
