@@ -47,7 +47,7 @@ class WapitiAdapter(IScannerAdapter):
                         _template["custom_args"] = value
             return _template
 
-    @deprecated
+    @deprecated("This method is deprecated, use _parse_to_sarif instead")
     def parse_results(self, path:str) -> dict:
         """Converts Wapiti results into a custom format"""
         with open(path, "r") as report:
@@ -82,6 +82,7 @@ class WapitiAdapter(IScannerAdapter):
             return {"parsed":{"categories": categories, "descriptions": descriptions, "vulnerabilities": vulnerabilities}, "vulnerability_count": len(vulnerabilities),"critical_vulnerabilities": _critical, "raw": wapiti_report, "extra": wapiti_report["infos"]}
 
     # TODO: There are still findings that are not converted in mappings
+    # TODO: move to parse_results()
     def _parse_to_sarif(self, path:str):
         sarif_report = {"version": "2.1.0","runs": [{"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}]}
         with open(path, "r") as report:
@@ -105,7 +106,7 @@ class WapitiAdapter(IScannerAdapter):
                                 case "path":
                                     result["locations"].append({"physicalLocation": {"artifactLocation": {"uri": value}}})
                                 case _:
-                                    if key == "wstg":
+                                    if key == "wstg": # This _list is just the contents of value, can just copy contents for better readability
                                         _list = []
                                         for item in value:
                                             _list.append(item)
@@ -120,11 +121,10 @@ class WapitiAdapter(IScannerAdapter):
         """Parses Wapiti3's vulnerability definitions to sarif. This function has an intended side effect of mutating the rule variable.
         :param sarif_report: dictionary to modify
         :param report: report to read"""
-        WSTG_TO_CWE = open("../config/templates/wstg_to_cwe.json", "r")
+        WSTG_TO_CWE = open("../../config/templates/wstg_to_cwe.json", "r")
         mapping = json.load(WSTG_TO_CWE)
         for category in report["vulnerabilities"]:
-            rule = {"id": category}
-            rule.update({"shortDescription": {"text": category}})
+            rule = {"id": category, "shortDescription": {"text": category}}
             for key, value in report["classifications"][category].items():
                 match key:
                     case "desc":
@@ -137,15 +137,16 @@ class WapitiAdapter(IScannerAdapter):
                             markdown.join(f"\n[{title}]({link})")
                         rule["help"].update({"markdown": value})
                     case "wstg":
+                        _list = []
                         if category in mapping:
-                            _list = []
-                            if type(mapping[category]) is list:
-                                for item in mapping[category]:
-                                    _list.append(item)
-                            else:
-                                _list.append(mapping[category])
+                            _list.append(mapping[category])
                             for wstg in value:
                                 _list.append(wstg)
                         rule.update({"properties": {"tags": _list}})
             sarif_report["runs"][0]["tool"]["driver"]["rules"].append(rule)
         WSTG_TO_CWE.close()
+
+    @staticmethod
+    def _parse_info_to_sarif(sarif_report, report):
+        """TBD"""
+        pass
