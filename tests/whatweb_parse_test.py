@@ -20,8 +20,8 @@ def _parse_whatweb():
     _tech = []
     _cookies = []
     _extra = []
-    with open("../temp/whatweb/report.json") as report:
-        report = json.load(report)
+    with open("../temp/whatweb/report.json") as _:
+        report = json.load(_)
 
         for plugin, content in report[0]["plugins"].items():
             if plugin == "MetaGenerator" and len(content) > 0:

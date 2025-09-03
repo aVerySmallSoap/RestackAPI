@@ -3,18 +3,31 @@ import subprocess
 from warnings import deprecated
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
+from modules.interfaces.enums.ScanTypes import ScanType
 from modules.utils.load_configs import DEV_ENV
 from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 
 class WapitiAdapter(IScannerAdapter):
 
     # TODO: check if the scan errored in any way
-    # TODO: identify if the scan type is QUICK, FULL or CUSTOM using ScanTypes.py
-    def start_scan(self, url:str, config: dict = None):
+    def start_scan(self, url:str, user_config: dict = None):
+        """Starts a wapiti scan
+        :param url: The url to scan
+        :type url: str
+        :param user_config: The user configuration
+        :type user_config: dict"""
         config_builder = WapitiConfigBuilder()
-        config = config_builder.url(url).output_path(config["path"]).build()
-        process = subprocess.Popen(config)
-        process.wait()
+        match user_config["type"]:
+            case ScanType.QUICK:
+                _config = config_builder.url(url).output_path(user_config["path"]).build()
+                process = subprocess.Popen(_config)
+                process.wait()
+            case ScanType.FULL:
+                # TODO: Add implementation
+                pass
+            case _:
+                pass
+
 
     def stop_scan(self, scan_id:str|int) -> int:
         pass
@@ -81,8 +94,6 @@ class WapitiAdapter(IScannerAdapter):
                 vulnerabilities.append(_arr)
             return {"parsed":{"categories": categories, "descriptions": descriptions, "vulnerabilities": vulnerabilities}, "vulnerability_count": len(vulnerabilities),"critical_vulnerabilities": _critical, "raw": wapiti_report, "extra": wapiti_report["infos"]}
 
-    # TODO: There are still findings that are not converted in mappings
-    # TODO: move to parse_results()
     def _parse_to_sarif(self, path:str):
         sarif_report = {"version": "2.1.0","runs": [{"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}]}
         with open(path, "r") as report:
@@ -95,26 +106,18 @@ class WapitiAdapter(IScannerAdapter):
                         for key, value in vulnerability.items():
                             match key:
                                 case "level":
-                                    if value == 0:
-                                        result.update({"level": "note"})
-                                    elif value == 1:
-                                        result.update({"level": "warning"})
-                                    else:
-                                        result.update({"level": "error"})
+                                    self._parse_level_to_sarif(value, result)
                                 case "info":
                                     result.update({"message": {"text": value}})
                                 case "path":
                                     result["locations"].append({"physicalLocation": {"artifactLocation": {"uri": value}}})
                                 case _:
-                                    if key == "wstg": # This _list is just the contents of value, can just copy contents for better readability
-                                        _list = []
-                                        for item in value:
-                                            _list.append(item)
-                                        result["properties"].update({"wstg": _list})
+                                    if key == "wstg":
+                                        result["properties"].update({"wstg": value})
                                     result["properties"].update({key: value})
                     sarif_report["runs"][0]["results"].append(result)
-        with open(path, "w") as sarif:
-            sarif.write(json.dumps(sarif_report))
+        # with open(path, "w") as sarif:
+        #     sarif.write(json.dumps(sarif_report))
 
     @staticmethod
     def _parse_definitions_to_sarif(sarif_report, report):
@@ -150,3 +153,15 @@ class WapitiAdapter(IScannerAdapter):
     def _parse_info_to_sarif(sarif_report, report):
         """TBD"""
         pass
+
+    @staticmethod
+    def _parse_level_to_sarif(level: int, result: dict):
+        """Parses Wapiti's level information to sarif. A util function
+        :param level:
+        :param result: dictionary to modify"""
+        if level == 0:
+            result.update({"level": "note"})
+        elif level == 1:
+            result.update({"level": "warning"})
+        else:
+            result.update({"level": "error"})

@@ -7,6 +7,7 @@ from pydantic import BaseModel, AnyUrl
 
 from modules.db.database import Database
 from modules.db.filters.filter_by_date import date_filter_range
+from modules.interfaces.enums.ScanTypes import ScanType
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebAdapter import WhatWebAdapter
@@ -45,16 +46,16 @@ class ScanRequest(BaseModel):
 
 @app.post("/api/v1/wapiti/scan/quick")
 async def wapiti_scan(request: ScanRequest) -> dict:
-    time_start = time.perf_counter()
     _wapiti_scanner = WapitiAdapter()
     _whatweb_scanner = WhatWebAdapter()
     # == testing code ==
     _URL = check_url_local_test(str(request.url))
     # == testing end ==
+    time_start = time.perf_counter()
     _scan_start = datetime.now()
     _scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
-    path = _scannerEngine.generate_path(ScannerTypes.WAPITI)
-    config = _wapiti_scanner.generate_config({"path": path, "modules": ["all"]})
+    path = _scannerEngine.generate_file(ScannerTypes.WAPITI)
+    config = _wapiti_scanner.generate_config({"path": path, "modules": ["all"], "type": ScanType.QUICK})
     _wapiti_scanner.start_scan(_URL, config)
     report = _wapiti_scanner.parse_results(path)
     await _whatweb_scanner.start_scan(_URL)
@@ -78,7 +79,7 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     # == testing end ==
     _scan_start = datetime.now()
     _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
-    path = _scannerEngine.generate_path(ScannerTypes.ZAP)
+    path = _scannerEngine.generate_file(ScannerTypes.ZAP)
     await _whatweb_scanner.start_scan(_URL)
     _zap_scanner.start_scan(_URL, {"path": path, "scan_type": ZAPScanTypes.PASSIVE})
     _whatweb_results = _whatweb_scanner.parse_results()

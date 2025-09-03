@@ -24,7 +24,6 @@ class ScannerEngine(metaclass=Singleton):
     _zap_path = DEV_ENV["report_paths"]["zap"]
 
     def enqueue_session(self, scanner_type: ScannerTypes, start_time: datetime):
-        # TODO: write to session database
         self._enqueue_name(start_time)
         self._ScanQueue.put({"scanner": scanner_type, "date": start_time})
 
@@ -37,7 +36,9 @@ class ScannerEngine(metaclass=Singleton):
     def _dequeue_name(self) -> str:
         return self._NameQueue.get()
 
-    def generate_path(self, scanner_type: ScannerTypes) -> str:
+    def generate_file(self, scanner_type: ScannerTypes) -> str:
+        """Generates the json file for the reports.
+        :param scanner_type: Type of scanner"""
         match scanner_type:
             case ScannerTypes.WAPITI:
                 return f"{self._wapiti_path}\\{self._dequeue_name()}.json"
