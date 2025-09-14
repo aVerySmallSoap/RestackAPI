@@ -1,12 +1,31 @@
 import json
+import os
 
-# ENV = json.load(open("./config/ENV.json", "r"))
-# WAPITI_CONFIG = json.load(open("./config/templates/wapiti_config.json", "r"))
-# ZAP_TEMPLATE = json.load(open("./config/templates/zap_template.json", "r"))
-# ZAP_MAPPING = json.load(open("./config/templates/zap_to_wapiti.json", "r"))
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# DEV VARIABLES
-DEV_ENV = json.load(open("../../config/ENV.json", "r"))
-DEV_WAPITI_CONFIG = json.load(open("../../config/templates/wapiti_config.json", "r"))
-DEV_ZAP_TEMPLATE = json.load(open("../../config/templates/zap_template.json", "r"))
-DEV_ZAP_MAPPING = json.load(open("../../config/templates/zap_to_wapiti.json", "r"))
+config_dir = os.path.normpath(os.path.join(script_dir, "..", "..", "config"))
+
+try:
+    DEV_ENV = json.load(open(os.path.join(config_dir, "ENV.json"), "r"))
+
+    templates_dir = os.path.join(config_dir, "templates")
+    DEV_WAPITI_CONFIG = json.load(
+        open(os.path.join(templates_dir, "wapiti_config.json"), "r")
+    )
+    DEV_ZAP_TEMPLATE = json.load(
+        open(os.path.join(templates_dir, "zap_template.json"), "r")
+    )
+    DEV_ZAP_MAPPING = json.load(
+        open(os.path.join(templates_dir, "zap_to_wapiti.json"), "r")
+    )
+
+except FileNotFoundError as e:
+    print("Error: A required configuration file was not found.")
+    print(f"Missing file: {e}")
+    DEV_ENV, DEV_WAPITI_CONFIG, DEV_ZAP_TEMPLATE, DEV_ZAP_MAPPING = (
+        None,
+        None,
+        None,
+        None,
+    )
+    exit()
