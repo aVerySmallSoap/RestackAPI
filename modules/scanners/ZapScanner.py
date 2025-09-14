@@ -1,17 +1,12 @@
 import json
 import time
-import urllib.parse
-from copy import deepcopy
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from zapv2 import ZAPv2
 
 class ZapAdapter(IScannerAdapter):
-    #TODO: implement passive scanning
-    #TODO: implement auto scanning
-    #TODO: implement active scanning
-    _redefinitions = json.load(open("./config/templates/zap_to_wapiti.json", "r"))
+    #TODO: Improve scanning capabilities
     _template = json.load(open("./config/templates/zap_template.json", "r"))
     zap: ZAPv2
 
@@ -35,41 +30,76 @@ class ZapAdapter(IScannerAdapter):
 
     # TODO: No error handling
     def parse_results(self, path:str) -> dict:
-        with open(path, "r") as report:
-            zap_report = json.load(report)
-            # Redefine names so some vulnerabilities have the same definition
-            for alert in zap_report:
-                for wap_def, zap_def in self._redefinitions.items():
-                    if type(zap_def) is dict:
-                        for definition in zap_def:
-                            if alert["name"] == definition:
-                                alert["name"] = wap_def
-                                continue
-                    if alert["name"] == zap_def:
-                        alert["name"] = wap_def
-            _findings = []
-            _critical = 0
-            for alert in zap_report:
-                _temp = deepcopy(self._template)
-                if alert["risk"] == "Critical":
-                    _critical += 1
-                _temp["name"] = alert["name"]
-                _temp["risk"] = alert["risk"]
-                _temp["description"] = alert["description"]
-                _temp["confidence"] = alert["confidence"]
-                _temp["method"] = alert["method"]
-                if len(alert["param"]) > 0:
-                    _temp["param"] = alert["param"]
-                else:
-                    _temp["param"] = "no param"
-                _temp["url"] = alert["url"]
-                _temp["solution"] = alert["solution"]
-                _temp["reference"] = alert[
-                    "reference"]
-                _temp["endpoint"] = urllib.parse.urlparse(alert["url"]).path
-                _findings.append(_temp)
-        #TODO: get _context_lookup to find crawled pages and remove the constant value
-        return {"parsed": _findings, "crawled_pages": 1, "vulnerability_count": len(zap_report), "critical_vulnerabilities": _critical, "raw": zap_report}
+        with open(path, "r") as f:
+            report = json.load(f)
+            _sarif = {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {
+                            "driver": {
+                                "name": "OWASP ZAP",
+                                "rules": []
+                            }
+                        },
+                        "results": []
+                    }
+                ]
+            }
+            rules_seen = set()  # avoid duplicate rules
+            for alert in report:
+                if alert["pluginId"] not in rules_seen:
+                    _rule = {
+                        "id": alert["pluginId"],
+                        "name": alert["name"],
+                        "fullDescription": {"text": alert["description"]},
+                        "help": {
+                            "text": alert["solution"],
+                            "markdown": "\n".join(
+                                f"[{ref}]({link})" for ref, link in alert["tags"].items() if link != ""
+                            )
+                        },
+                        "properties": {
+                            "cwe": alert["cweid"],
+                            "wasc": alert["wascid"],
+                            "risk": alert["risk"]
+                        }
+                    }
+                    _sarif["runs"][0]["tool"]["driver"]["rules"].append(_rule)
+                    rules_seen.add(alert["pluginId"])
+            for alert in report:
+                _result = {
+                    "ruleId": alert["pluginId"],
+                    "message": {"text": alert["description"]},
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": alert["url"]}
+                            }
+                        }
+                    ],
+                    "properties": {
+                        "method": alert.get("method"),
+                        "evidence": alert.get("evidence"),
+                        "confidence": alert.get("confidence")
+                    }
+                }
+                if alert.get("other"):
+                    _result["properties"]["other"] = alert["other"]
+                match alert["risk"]:
+                    case "High":
+                        _result["level"] = "error"
+                    case "Informational":
+                        _result["level"] = "note"
+                    case "Low":
+                        _result["level"] = "note"
+                    case "Medium":
+                        _result["level"] = "warning"
+                    case _:
+                        _result["level"] = "none"
+                _sarif["runs"][0]["results"].append(_result)
+            # with open("zap_report.sarif", "w") as out:
+            #     json.dump(_sarif, out, indent=2)
 
     def _context_lookup(self, target: str) -> bool:
         # Using both traditional and ajax spider

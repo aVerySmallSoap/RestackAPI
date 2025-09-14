@@ -116,14 +116,12 @@ class WapitiAdapter(IScannerAdapter):
                                         result["properties"].update({"wstg": value})
                                     result["properties"].update({key: value})
                     sarif_report["runs"][0]["results"].append(result)
-        # with open(path, "w") as sarif:
-        #     sarif.write(json.dumps(sarif_report))
 
     @staticmethod
     def _parse_definitions_to_sarif(sarif_report, report):
         """Parses Wapiti3's vulnerability definitions to sarif. This function has an intended side effect of mutating the rule variable.
         :param sarif_report: dictionary to modify
-        :param report: report to read"""
+        :param report: report to read and rewrite"""
         WSTG_TO_CWE = open("../../config/templates/wstg_to_cwe.json", "r")
         mapping = json.load(WSTG_TO_CWE)
         for category in report["vulnerabilities"]:
