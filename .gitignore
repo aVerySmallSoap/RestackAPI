@@ -3,3 +3,7 @@ config/ENV.json
 modules/utils/ext/requirements.txt
 temp/
 reports/*
+*.sarif
+ENV.*
+*.env
+.env
