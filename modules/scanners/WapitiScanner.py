@@ -102,7 +102,7 @@ class WapitiAdapter(IScannerAdapter):
             for category in report["vulnerabilities"]:
                 if len(report["vulnerabilities"][category]) != 0:
                     for vulnerability in report["vulnerabilities"][category]:
-                        result = {"ruleID": category, "locations": [], "properties": {}}
+                        result = {"ruleId": category, "locations": [], "properties": {}}
                         for key, value in vulnerability.items():
                             match key:
                                 case "level":

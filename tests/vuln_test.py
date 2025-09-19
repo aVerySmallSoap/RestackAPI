@@ -1,0 +1,3 @@
+from modules.utils.docker_utils import update_vuln_search_service
+
+update_vuln_search_service()

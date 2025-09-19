@@ -1,5 +1,6 @@
 import json
 import time
+import urllib.parse
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
@@ -74,7 +75,7 @@ class ZapAdapter(IScannerAdapter):
                     "locations": [
                         {
                             "physicalLocation": {
-                                "artifactLocation": {"uri": alert["url"]}
+                                "artifactLocation": {"uri": urllib.parse.urlparse(alert["url"]).path}
                             }
                         }
                     ],
