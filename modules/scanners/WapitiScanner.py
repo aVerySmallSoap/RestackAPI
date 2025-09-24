@@ -130,7 +130,7 @@ class WapitiAdapter(IScannerAdapter):
         """Parses Wapiti3's vulnerability definitions to sarif. This function has an intended side effect of mutating the rule variable.
         :param sarif_report: dictionary to modify
         :param report: report to read and rewrite"""
-        WSTG_TO_CWE = open("../../config/templates/wstg_to_cwe.json", "r")
+        WSTG_TO_CWE = open("config/templates/wstg_to_cwe.json", "r")
         mapping = json.load(WSTG_TO_CWE)
         for category in report["vulnerabilities"]:
             rule = {"id": category, "shortDescription": {"text": category}}
