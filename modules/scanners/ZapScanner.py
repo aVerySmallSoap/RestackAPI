@@ -8,7 +8,6 @@ from zapv2 import ZAPv2
 
 class ZapAdapter(IScannerAdapter):
     #TODO: Improve scanning capabilities
-    _template = json.load(open("./config/templates/zap_template.json", "r"))
     zap: ZAPv2
 
     def __init__(self, config: dict):

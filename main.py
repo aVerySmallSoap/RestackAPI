@@ -55,14 +55,14 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     _scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
     path = _scannerEngine.generate_file(ScannerTypes.WAPITI)
-    config = _wapiti_scanner.generate_config({"path": path, "modules": ["all"], "type": ScanType.QUICK})
-    _wapiti_scanner.start_scan(_URL, config)
-    report = _wapiti_scanner.parse_results(path)
+    config = _wapiti_scanner.generate_config({"path": path, "modules": ["all"]})
+    _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
+    report = _wapiti_scanner.parse_to_sarif(path) # TODO: Change how the DB reads this
     await _whatweb_scanner.start_scan(_URL)
     _whatweb_results = _whatweb_scanner.parse_results()
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    _db.insert_wapiti_quick_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    # _db.insert_wapiti_quick_report(_scan_start, path, _whatweb_results["raw"], report, scan_time) # Rewrite reading of report variable
     return {"data": report["parsed"], "extra": report["extra"], "plugins": _whatweb_results["parsed"], "scan_time": scan_time}
 
 @app.post("/api/v1/wapiti/scan/full")

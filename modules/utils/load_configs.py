@@ -15,10 +15,6 @@ try:
     DEV_ZAP_TEMPLATE = json.load(
         open(os.path.join(templates_dir, "zap_template.json"), "r")
     )
-    DEV_ZAP_MAPPING = json.load(
-        open(os.path.join(templates_dir, "zap_to_wapiti.json"), "r")
-    )
-
 except FileNotFoundError as e:
     print("Error: A required configuration file was not found.")
     print(f"Missing file: {e}")

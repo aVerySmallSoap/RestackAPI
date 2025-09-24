@@ -40,6 +40,7 @@ class Database:
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
+            # TODO: raw_data access is now in SARIF
             report_id = str(uuid.uuid4())
             report = Report(
                 id=report_id,
@@ -78,6 +79,7 @@ class Database:
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
+            # TODO: raw_data access is now in SARIF, need to change how it is accessed
             report_id = str(uuid.uuid4())
             report = Report(
                 id=report_id,

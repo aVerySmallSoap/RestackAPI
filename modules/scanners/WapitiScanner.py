@@ -10,14 +10,17 @@ from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 class WapitiAdapter(IScannerAdapter):
 
     # TODO: check if the scan errored in any way
-    def start_scan(self, url:str, user_config: dict = None):
+    def start_scan(self, url:str,  scan_type: ScanType, user_config: dict = None):
         """Starts a wapiti scan
+        :param scan_type: QUICK or FULL
+        :type ScanType: enums.ScanType
         :param url: The url to scan
         :type url: str
         :param user_config: The user configuration
         :type user_config: dict"""
         config_builder = WapitiConfigBuilder()
-        match user_config["type"]:
+        print(user_config)
+        match scan_type:
             case ScanType.QUICK:
                 _config = config_builder.url(url).output_path(user_config["path"]).build()
                 process = subprocess.Popen(_config)
@@ -60,7 +63,7 @@ class WapitiAdapter(IScannerAdapter):
                         _template["custom_args"] = value
             return _template
 
-    @deprecated("This method is deprecated, use _parse_to_sarif instead")
+    @deprecated("This method is deprecated, use parse_to_sarif instead")
     def parse_results(self, path:str) -> dict:
         """Converts Wapiti results into a custom format"""
         with open(path, "r") as report:
@@ -94,7 +97,11 @@ class WapitiAdapter(IScannerAdapter):
                 vulnerabilities.append(_arr)
             return {"parsed":{"categories": categories, "descriptions": descriptions, "vulnerabilities": vulnerabilities}, "vulnerability_count": len(vulnerabilities),"critical_vulnerabilities": _critical, "raw": wapiti_report, "extra": wapiti_report["infos"]}
 
-    def _parse_to_sarif(self, path:str):
+    def parse_to_sarif(self, path:str) -> dict:
+        """Parses generated report to SARIF v2.1.0
+        :param path: The path of the report to parse
+        :type path: str
+        :return: The parsed report"""
         sarif_report = {"version": "2.1.0","runs": [{"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}]}
         with open(path, "r") as report:
             report = json.load(report)
@@ -116,6 +123,7 @@ class WapitiAdapter(IScannerAdapter):
                                         result["properties"].update({"wstg": value})
                                     result["properties"].update({key: value})
                     sarif_report["runs"][0]["results"].append(result)
+        return sarif_report
 
     @staticmethod
     def _parse_definitions_to_sarif(sarif_report, report):
