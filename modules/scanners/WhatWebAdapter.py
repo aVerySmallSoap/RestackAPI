@@ -23,15 +23,43 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         pass
 
     def parse_results(self, path: str = None) -> dict:
-        raw = self.fetch_plugins_data()
-        parsed = self.parse_volume_data()
-        return {"raw": raw, "parsed": parsed}
+        #TODO: Make use of session names and session IDs
+        _excluded = ["UncommonHeaders", "Open-Graph-Protocol", "Title", "Frame", "Script"]
+        _trivial = ["Email", "Script", "IP", "Country", "HTTPServer"]
+        _versioned_tech = []
+        _tech = []
+        _cookies = []
+        _extra = []
+        with open("temp/whatweb/report.json", "r+") as _:
+            report = json.load(_)
+            print(report)
+            if len(report) <= 0 or report is None:
+                return {"error":True, "message": "No technologies found"}
+            for plugin, content in report[0]["plugins"].items():
+                if plugin == "MetaGenerator" and len(content) > 0:
+                    self._parse_meta_generator(content["string"], _versioned_tech)
+                    continue
+                if plugin in _excluded:
+                    continue
+                if plugin in _trivial:
+                    _extra.append({plugin: content["string"]})
+                    continue
+                if plugin == "Cookies":  # Handle cookies differently
+                    _cookies.append({plugin: content["string"]})
+                    continue
+                if content is not None and "version" in content:
+                    _temp = {plugin: content["version"]}
+                    if _temp not in _versioned_tech:
+                        _versioned_tech.append(_temp)
+                    continue
+                _tech.append({plugin: content})
+        return {"data": [_versioned_tech, _tech, _cookies, _extra]}
 
     async def discover_then_volume(self, url: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "-a 1", "--verbose", "--log-json ./reports/report.json", url],
+                              ["./whatweb", "-a 1", "--verbose", "--log-json", "./reports/report.json", url],
                               volumes={
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True,
@@ -48,8 +76,23 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                 return plugins
             return data
 
+    def _parse_meta_generator(self, meta_data: dict, technologies: list):
+        for item in meta_data:
+            _string = ""
+            _version = ""
+            for index in range(len(item)):
+                if item[index] == ";":  # Edge case of Tech_name version; wherein the tech is displayed with features
+                    break
+                if item[index].isdigit() or item[index] == ".":
+                    _version += item[index]
+                elif item[index] != len(item) - 1:
+                    _string += item[index]
+            technologies.append({_string.rstrip(): [_version]})
+
     def fetch_plugins_data(self) -> list:
         with open(self._local_report_path, "r") as f:
+            if f is None:
+                return []
             data = json.load(f)
             if len(data) > 0:
                 return data[0]

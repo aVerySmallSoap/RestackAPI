@@ -13,13 +13,12 @@ class WapitiAdapter(IScannerAdapter):
     def start_scan(self, url:str,  scan_type: ScanType, user_config: dict = None):
         """Starts a wapiti scan
         :param scan_type: QUICK or FULL
-        :type ScanType: enums.ScanType
+        :type scan_type: enums.ScanType
         :param url: The url to scan
         :type url: str
         :param user_config: The user configuration
         :type user_config: dict"""
         config_builder = WapitiConfigBuilder()
-        print(user_config)
         match scan_type:
             case ScanType.QUICK:
                 _config = config_builder.url(url).output_path(user_config["path"]).build()
@@ -42,7 +41,7 @@ class WapitiAdapter(IScannerAdapter):
         with open(DEV_ENV["templates_path"]["wapiti"], "r") as file:
             _template = json.load(file)
             if len(user_config) == 0:
-                return {"error": "Invalid config: Configuration empty!"}
+                return {"error": True, "message": "Invalid config: Configuration empty!"}
             for key, value in user_config.items():
                 match key:
                     case "url":

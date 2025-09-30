@@ -8,13 +8,14 @@ from pydantic import BaseModel, AnyUrl
 from modules.db.database import Database
 from modules.db.filters.filter_by_date import date_filter_range
 from modules.interfaces.enums.ScanTypes import ScanType
+from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebAdapter import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from services.ScannerEngine import ScannerEngine
 from modules.utils.docker_utils import start_manual_zap_service
-from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
+from modules.utils.check_dir import check_directories
 
 # == TESTING MODULES ==
 from modules.utils.DEV_utils import check_url_local_test
@@ -29,11 +30,12 @@ from modules.utils.DEV_utils import check_url_local_test
 _db = Database()
 start_manual_zap_service({"apikey": "test"})
 _scannerEngine = ScannerEngine()
+check_directories()
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], #TODO: Fetch security certs and allow only a single origin
+    allow_origins=["*"],
     allow_methods=["*"],
 )
 
@@ -63,7 +65,10 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     time_end = time.perf_counter()
     scan_time = time_end - time_start
     # _db.insert_wapiti_quick_report(_scan_start, path, _whatweb_results["raw"], report, scan_time) # Rewrite reading of report variable
-    return {"data": report["parsed"], "extra": report["extra"], "plugins": _whatweb_results["parsed"], "scan_time": scan_time}
+    if _whatweb_results["error"]:
+        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
+    else:
+        return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
 
 @app.post("/api/v1/wapiti/scan/full")
 async def wapiti_scan_full(request: ScanRequest) -> dict:
@@ -86,8 +91,13 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
-    return {"data": report["parsed"], "plugins": _whatweb_results["parsed"], "scan_time": scan_time}
+    if _whatweb_results["error"]:
+        _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
+    else:
+        _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+        return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
+
 
 @app.post("/api/v1/zap/scan/active")
 async def zap_active_scan(request: ScanRequest) -> dict:
@@ -119,7 +129,4 @@ async def filter_date_by_month(month:int):
 
 @app.get("/api/v1/filter/reports/year/")
 async def filter_date_by_year(year:int):
-    pass
-
-if __name__ == '__main__':
     pass
