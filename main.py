@@ -65,10 +65,10 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     time_end = time.perf_counter()
     scan_time = time_end - time_start
     # _db.insert_wapiti_quick_report(_scan_start, path, _whatweb_results["raw"], report, scan_time) # Rewrite reading of report variable
-    if _whatweb_results["error"]:
-        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
-    else:
+    if not _whatweb_results.__contains__("error"):
         return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
+    else:
+        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
 
 @app.post("/api/v1/wapiti/scan/full")
 async def wapiti_scan_full(request: ScanRequest) -> dict:
