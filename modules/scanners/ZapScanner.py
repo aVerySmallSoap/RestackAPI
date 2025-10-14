@@ -110,7 +110,6 @@ class ZapAdapter(IScannerAdapter):
         self.zap.ajaxSpider.scan(target, inscope=False)
         while self.zap.ajaxSpider.status == "running":
             time.sleep(2)
-        #TODO: return false if something fails here
         return True
 
     def _start_passive_scan(self, target: str, report_path: str):
