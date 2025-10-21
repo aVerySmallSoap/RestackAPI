@@ -86,22 +86,42 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
     path = _scannerEngine.generate_file(ScannerTypes.ZAP)
     await _whatweb_scanner.start_scan(_URL)
-    _zap_scanner.start_scan(_URL, {"path": path, "scan_type": ZAPScanTypes.PASSIVE})
+    _zap_scanner.start_scan(_URL, {"path": path, "scan_type": ZAPScanTypes.PASSIVE, "apikey": "test"})
     _whatweb_results = _whatweb_scanner.parse_results()
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    if not _whatweb_results.__contains__("error"):
-        _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
-        return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
-    else:
-        _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
-        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
+    # if not _whatweb_results.__contains__("error"):
+    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    #     return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
+    # else:
+    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    #     return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
 
 
 @app.post("/api/v1/zap/scan/active")
 async def zap_active_scan(request: ScanRequest) -> dict:
-    pass
+    time_start = time.perf_counter()
+    _zap_scanner = ZapAdapter({"apikey": "test"})
+    _whatweb_scanner = WhatWebAdapter()
+    # == testing code ==
+    _URL = check_url_local_test(str(request.url))
+    # == testing end ==
+    _scan_start = datetime.now()
+    _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
+    path = _scannerEngine.generate_file(ScannerTypes.ZAP)
+    await _whatweb_scanner.start_scan(_URL)
+    _zap_scanner.start_scan(_URL, {"path": path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
+    _whatweb_results = _whatweb_scanner.parse_results()
+    report = _zap_scanner.parse_results(path)
+    time_end = time.perf_counter()
+    scan_time = time_end - time_start
+    # if not _whatweb_results.__contains__("error"):
+    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    #     return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
+    # else:
+    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+    #     return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
 
 @app.get("/api/v1/wapiti/report/{report_id}")
 async def wapiti_report(report_id: str) -> dict:
