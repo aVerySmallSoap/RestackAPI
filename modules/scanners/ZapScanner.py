@@ -1,4 +1,5 @@
 import json
+import pprint
 import time
 import urllib.parse
 import requests
@@ -110,7 +111,7 @@ class ZapAdapter(IScannerAdapter):
             message_ids = ""
 
             for alert in report:
-                message_ids += str(alert['id']) + ','
+                message_ids += str(alert['sourceMessageId']) + ','
             message_ids = message_ids.removesuffix(',')
 
             print(message_ids)
