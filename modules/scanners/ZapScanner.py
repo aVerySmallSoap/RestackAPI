@@ -1,5 +1,4 @@
 import json
-from pprint import pprint
 import time
 import urllib.parse
 import requests
@@ -33,8 +32,6 @@ class ZapAdapter(IScannerAdapter):
     # TODO: No error handling
     def parse_results(self, path:str) -> dict:
         _alert_hars = self._fetch_alert_har(path)
-        print(f"Number of request messages fetched: {len(_alert_hars)}")
-        pprint(_alert_hars)
         with open(path, "r") as f:
             report = json.load(f)
             _sarif = {
@@ -121,9 +118,7 @@ class ZapAdapter(IScannerAdapter):
             for alert in report:
                 message_ids += str(alert['sourceMessageId']) + ','
             message_ids = message_ids.removesuffix(',')
-            print(message_ids)
             messages = self.zap.core.messages_by_id(message_ids)
-            print(f"Number of messages for link: {len(messages)}\nNumber of alerts: {len(report)}")
             if len(messages) > 0 and type(messages) is not str:
                 _har_list = []
                 for message in messages:  # id requestBody requestHeader responseBody responseHeader

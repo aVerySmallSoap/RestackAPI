@@ -146,28 +146,36 @@ class Database:
 
 
     @staticmethod
-    def _insert_wapiti_vulnerabilities(parent_report_id: str, scan_time: datetime, data:dict, session: Session):
-        raw_data = data["raw"]
-        parsed_data = data["parsed"] #TODO: Cleanup and use a template
+    def _insert_wapiti_vulnerabilities(parent_report_id: str, scan_time: datetime, raw_data:dict, session: Session):
         _entries = []
-        for category in parsed_data["categories"]:
-            for vulnerability in raw_data["vulnerabilities"][category]:
-                _vuln = Vulnerability(
-                    id=str(uuid.uuid4()),
-                    report_id=parent_report_id,
-                    scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    scanner="Wapiti",
-                    vulnerability_type=category,
-                    severity=vulnerability["level"],
-                    http_request=vulnerability["info"], #http_request
-                    endpoint=vulnerability["path"],
-                    remediation_effort=raw_data["classifications"][category]["sol"],
-                    method=vulnerability["method"],
-                    state="new",
-                    confidence="Low", #TODO: find something to replace this constant
-                    data=json.dumps(vulnerability),
-                )
-                _entries.append(_vuln)
+        _rules = utils.unroll_sarif_rules(raw_data)
+        for vulnerability in raw_data["runs"][0]["results"]:
+            _rule = _rules.get(vulnerability["ruleId"])
+            _severity = vulnerability["level"]
+            if str.lower(_severity) == "note":
+                _severity = "Low"
+            elif str.lower(_severity) == "warning":
+                _severity = "Medium"
+            elif str.lower(_severity) == "error":
+                _severity = "High"
+            else:
+                _severity = "none"
+            _vuln = Vulnerability(
+                id=str(uuid.uuid4()),
+                report_id=parent_report_id,
+                scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
+                scanner="Wapiti",
+                vulnerability_type=_rule["name"],
+                severity= _severity,
+                http_request=vulnerability["properties"]["http_request"],
+                endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+                remediation_effort=_rule["help"]["text"],
+                method=vulnerability["properties"]["method"],
+                state="new",
+                confidence="Low",
+                data=json.dumps(vulnerability)
+            )
+            _entries.append(_vuln)
         session.add_all(_entries)
 
     @property
