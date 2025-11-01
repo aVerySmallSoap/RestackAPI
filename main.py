@@ -41,6 +41,7 @@ app.add_middleware(
 
 class ScanRequest(BaseModel):
     url: AnyUrl
+    config: dict|None = None
 
 # TODO: Check if reports folder is present in CWD
 # NOTE! THIS SHOULD BE DEVELOPED WITH SPECIALIZATION IN MIND. THIS APP SHOULD NOT BE GENERALIZED TO SPEED UP DEVELOPMENT
@@ -48,6 +49,7 @@ class ScanRequest(BaseModel):
 
 @app.post("/api/v1/wapiti/scan/quick")
 async def wapiti_scan(request: ScanRequest) -> dict:
+    """Starts a configured wapiti scan"""
     _wapiti_scanner = WapitiAdapter()
     _whatweb_scanner = WhatWebAdapter()
     # == testing code ==
@@ -73,11 +75,13 @@ async def wapiti_scan(request: ScanRequest) -> dict:
 
 @app.post("/api/v1/wapiti/scan/full")
 async def wapiti_scan_full(request: ScanRequest) -> dict:
+    """Launches a wapiti scan with user-defined configurations"""
     pass
 
 
 @app.post("/api/v1/zap/scan/passive")
 async def zap_passive_scan(request: ScanRequest) -> dict:
+    """Starts a passive zap scan"""
     time_start = time.perf_counter()
     _zap_scanner = ZapAdapter({"apikey": "test"})
     _whatweb_scanner = WhatWebAdapter()
@@ -93,16 +97,16 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
+    _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
     if not _whatweb_results.__contains__("error"):
-        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
     else:
-        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
 
 
 @app.post("/api/v1/zap/scan/active")
 async def zap_active_scan(request: ScanRequest) -> dict:
+    """Starts an active zap scan"""
     time_start = time.perf_counter()
     _zap_scanner = ZapAdapter({"apikey": "test"})
     _whatweb_scanner = WhatWebAdapter()
@@ -118,9 +122,18 @@ async def zap_active_scan(request: ScanRequest) -> dict:
     report = _zap_scanner.parse_results(path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
+    _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
     if not _whatweb_results.__contains__("error"):
-        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
     else:
-        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
+
+@app.post("/api/v1/zap/scan/full")
+async def zap_full_scan(request: ScanRequest) -> dict:
+    """Starts both a passive and active zap scan with user-defined configurations"""
+    pass
+
+@app.post("/api/v1/scan/")
+async def scan(request: ScanRequest) -> dict:
+    """Starts multiple scans using all tools (Wapiti and Zap) with user-defined configurations"""
+    pass
