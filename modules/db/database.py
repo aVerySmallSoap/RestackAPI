@@ -1,10 +1,12 @@
 import datetime
+import json
 from math import floor
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, create_database
 import uuid
+import modules.utils.__utils__ as utils
 
 from modules.db.session import Base
 from modules.db.table_collection import Report, TechDiscovery, Scan, Vulnerability
@@ -36,7 +38,7 @@ class Database:
         engine = self._check_engine()
         Base.metadata.create_all(engine)
 
-    def insert_wapiti_quick_report(self, timestamp:datetime, file_path:str, plugins: list, raw_data: dict, duration: float):
+    def insert_wapiti_quick_report(self, timestamp: datetime, file_path:str, plugins: list, raw_data: dict, duration: float):
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
@@ -75,9 +77,11 @@ class Database:
             self._insert_wapiti_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
 
-    def insert_zap_report(self, timestamp: datetime, file_path: str, plugins:list, raw_data: dict, duration: float):
+    def insert_zap_report(self, timestamp: datetime, file_path: str, plugins:list, raw_data: dict, duration: float, url):
         engine = self._check_engine()
         _tables = []
+        _data_dump = json.dumps(raw_data)
+        _plugins_dump = json.dumps(plugins)
         with Session(engine) as session:
             # TODO: raw_data access is now in SARIF, need to change how it is accessed
             report_id = str(uuid.uuid4())
@@ -87,15 +91,15 @@ class Database:
                 scan_type="Zap Scan",
                 scanner="Zap",
                 path=file_path,
-                total_vulnerabilities=raw_data["vulnerability_count"],
-                critical_count=raw_data["critical_vulnerabilities"]
+                total_vulnerabilities=len(raw_data["runs"][0]["results"]),
+                critical_count=utils.critical_counter(raw_data)
             )
             _tables.append(report)
             tech_disc = TechDiscovery(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                data=plugins
+                data=_plugins_dump
             )
             scan = Scan(
                 id=str(uuid.uuid4()),
@@ -103,42 +107,46 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="Zap",
                 scan_type="Zap Scan",
-                data=raw_data["parsed"],
-                crawl_depth=raw_data["crawled_pages"],
+                data=_data_dump,
+                crawl_depth=0, #TODO: fetch crawler results and add data here
                 scan_duration=floor(duration),
-                target_url=raw_data["parsed"][0]["url"]
+                target_url=url
             )
             _tables.append(tech_disc)
             _tables.append(scan)
             session.add_all(_tables)
-            self._insert_zap_vulnerabilities(report_id, timestamp, raw_data["parsed"], session)
+            self._insert_zap_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
 
     @staticmethod
-    def _insert_zap_vulnerabilities(parent_report_id: str, scan_time:datetime, raw_data: dict, session: Session):
+    def _insert_zap_vulnerabilities(parent_report_id: str, scan_time: datetime, raw_data: dict, session: Session):
         _entries = []
-        for vulnerability in raw_data:
+        _rules = utils.unroll_sarif_rules(raw_data)
+        for vulnerability in raw_data["runs"][0]["results"]:
+            _rule = _rules.get(vulnerability["ruleId"])
+            _json_dump = json.dumps(vulnerability)
             _vuln = Vulnerability(
                 id=str(uuid.uuid4()),
                 report_id=parent_report_id,
                 scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="Zap",
-                vulnerability_type=vulnerability["name"],
-                severity=vulnerability["risk"],
-                info=vulnerability["description"], #TODO: there should be a unified thing here (no info in zap unlike wapiti, or at least its counter-part)
-                endpoint=vulnerability["endpoint"],
-                remediation_effort=vulnerability["solution"],
-                method=vulnerability["method"],
-                confidence=vulnerability["confidence"],
-                params=vulnerability["param"],
-                data=vulnerability
+                vulnerability_type=_rule["name"],
+                severity=_rule["properties"]["risk"],
+                description=_rule["fullDescription"]["text"],
+                http_request= json.dumps(vulnerability["properties"]["har"]) if vulnerability["properties"]["har"] is not None else None,
+                endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+                remediation_effort=_rule["help"]["text"],
+                method=vulnerability["properties"]["method"],
+                confidence=vulnerability["properties"]["confidence"],
+                state="new",
+                data=_json_dump
             )
             _entries.append(_vuln)
         session.add_all(_entries)
 
 
     @staticmethod
-    def _insert_wapiti_vulnerabilities(parent_report_id: str, scan_time:datetime, data:dict, session: Session):
+    def _insert_wapiti_vulnerabilities(parent_report_id: str, scan_time: datetime, data:dict, session: Session):
         raw_data = data["raw"]
         parsed_data = data["parsed"] #TODO: Cleanup and use a template
         _entries = []
@@ -151,13 +159,13 @@ class Database:
                     scanner="Wapiti",
                     vulnerability_type=category,
                     severity=vulnerability["level"],
-                    info=vulnerability["info"],
+                    http_request=vulnerability["info"], #http_request
                     endpoint=vulnerability["path"],
                     remediation_effort=raw_data["classifications"][category]["sol"],
                     method=vulnerability["method"],
-                    params= vulnerability["parameter"],
+                    state="new",
                     confidence="Low", #TODO: find something to replace this constant
-                    data=vulnerability,
+                    data=json.dumps(vulnerability),
                 )
                 _entries.append(_vuln)
         session.add_all(_entries)

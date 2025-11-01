@@ -1,5 +1,5 @@
 import json
-import pprint
+from pprint import pprint
 import time
 import urllib.parse
 import requests
@@ -33,6 +33,8 @@ class ZapAdapter(IScannerAdapter):
     # TODO: No error handling
     def parse_results(self, path:str) -> dict:
         _alert_hars = self._fetch_alert_har(path)
+        print(f"Number of request messages fetched: {len(_alert_hars)}")
+        pprint(_alert_hars)
         with open(path, "r") as f:
             report = json.load(f)
             _sarif = {
@@ -71,6 +73,9 @@ class ZapAdapter(IScannerAdapter):
                     _sarif["runs"][0]["tool"]["driver"]["rules"].append(_rule)
                     rules_seen.add(alert["pluginId"])
             for alert in report:
+                _alert_har = _alert_hars.get(alert.get("sourceMessageId"))
+                if _alert_har is None:
+                    _alert_har = _alert_hars.get(alert["id"])
                 _result = {
                     "ruleId": alert["pluginId"],
                     "message": {"text": alert["description"]},
@@ -85,7 +90,8 @@ class ZapAdapter(IScannerAdapter):
                         "method": alert.get("method"),
                         "evidence": alert.get("evidence"),
                         "confidence": alert.get("confidence"),
-                        "har": _alert_hars.get(alert.get("id"))
+                        "har": _alert_har.pop(0) if _alert_har is not None else None,
+                        "zapId": alert.get("id")
                     }
                 }
                 if alert.get("other"):
@@ -102,24 +108,24 @@ class ZapAdapter(IScannerAdapter):
                     case _:
                         _result["level"] = "none"
                 _sarif["runs"][0]["results"].append(_result)
+            # Test
             with open("zap_report.sarif", "w") as out:
                 json.dump(_sarif, out, indent=2)
+            # end test
+            return _sarif
 
     def _fetch_alert_har(self, path:str) -> dict:
         with open(path, 'r') as f:
             report = json.load(f)
             message_ids = ""
-
             for alert in report:
                 message_ids += str(alert['sourceMessageId']) + ','
             message_ids = message_ids.removesuffix(',')
-
             print(message_ids)
             messages = self.zap.core.messages_by_id(message_ids)
-            print(len(messages))
-
-            if len(messages) > 0:
-                _returnable = {}
+            print(f"Number of messages for link: {len(messages)}\nNumber of alerts: {len(report)}")
+            if len(messages) > 0 and type(messages) is not str:
+                _har_list = []
                 for message in messages:  # id requestBody requestHeader responseBody responseHeader
                     har = {
                         "id": message["id"],
@@ -128,8 +134,16 @@ class ZapAdapter(IScannerAdapter):
                         "responseBody": message["responseBody"],
                         "responseHeader": message["responseHeader"]
                     }
-                    _returnable[message["id"]] = har
-        return _returnable
+                    _har_list.append(har)
+                _returnable = {}
+                for har in _har_list:
+                    if len(_returnable) == 0 or har["id"] not in _returnable:
+                        _returnable[har["id"]] = [har]
+                    else:
+                        _returnable.get(har["id"]).append(har)  # Assumes that the type returned is a list
+                with open('./test.json', 'w') as test:
+                    test.write(json.dumps(_returnable))
+            return _returnable
 
     def _context_lookup(self, target: str, api_key:str, additional_context: list = None) -> bool:
         self.zap.core.access_url(url=target, followredirects=True)

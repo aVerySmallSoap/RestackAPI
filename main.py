@@ -94,10 +94,10 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     time_end = time.perf_counter()
     scan_time = time_end - time_start
     if not _whatweb_results.__contains__("error"):
-    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
     else:
-    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+        _db.insert_zap_report(_scan_start, path, _whatweb_results, report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
 
 
@@ -119,8 +119,8 @@ async def zap_active_scan(request: ScanRequest) -> dict:
     time_end = time.perf_counter()
     scan_time = time_end - time_start
     if not _whatweb_results.__contains__("error"):
-    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
     else:
-    #     _db.insert_zap_report(_scan_start, path, _whatweb_results["raw"], report, scan_time)
+        _db.insert_zap_report(_scan_start, path, _whatweb_results["data"], report, scan_time, _URL)
         return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}

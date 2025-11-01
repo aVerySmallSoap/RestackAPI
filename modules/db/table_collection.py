@@ -1,4 +1,7 @@
 from datetime import datetime
+from typing import Optional
+
+import sqlalchemy.types
 from sqlalchemy import String, ForeignKey, Column, JSON
 from sqlalchemy.orm import Mapped, relationship
 from sqlalchemy.testing.schema import mapped_column
@@ -24,7 +27,7 @@ class TechDiscovery(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     report_id: Mapped[str] = mapped_column(ForeignKey("reports.id"))
     scan_date: Mapped[datetime] = mapped_column(String(50))
-    data = Column(JSON)
+    data: Mapped[JSON] = mapped_column(JSON())
     parent = relationship("Report", back_populates="tech")
 
 class Scan(Base):
@@ -38,7 +41,7 @@ class Scan(Base):
     scan_duration: Mapped[float]
     crawl_depth: Mapped[int]
     target_url: Mapped[str]
-    data = Column(JSON)
+    data:Mapped[JSON] = mapped_column(JSON())
     parent = relationship("Report", back_populates="scan")
 
 class Vulnerability(Base):
@@ -51,9 +54,10 @@ class Vulnerability(Base):
     vulnerability_type: Mapped[str] = mapped_column(String(100))
     severity:Mapped[str] = mapped_column(String(50))
     confidence:Mapped[str] = mapped_column(String(25))
-    params:Mapped[str]
-    info:Mapped[str]
+    http_request: Mapped[Optional[JSON]] = mapped_column(JSON(), nullable=True)
+    description: Mapped[str]
     endpoint: Mapped[str]
     remediation_effort: Mapped[str]
     method: Mapped[str]
-    data = Column(JSON)
+    state: Mapped[str]
+    data: Mapped[JSON] = mapped_column(JSON())
