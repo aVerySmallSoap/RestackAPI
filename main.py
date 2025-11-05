@@ -43,10 +43,6 @@ class ScanRequest(BaseModel):
     url: AnyUrl
     config: dict|None = None
 
-# TODO: Check if reports folder is present in CWD
-# NOTE! THIS SHOULD BE DEVELOPED WITH SPECIALIZATION IN MIND. THIS APP SHOULD NOT BE GENERALIZED TO SPEED UP DEVELOPMENT
-# CONSIDERATIONS ARE TO LIMIT SCANS TO ORGANIZATION SPECIFIC WEBSITES SUCH AS http://www.mywebsite.com or https://my.personal.site
-
 @app.post("/api/v1/wapiti/scan/quick")
 async def wapiti_scan(request: ScanRequest) -> dict:
     """Starts a configured wapiti scan"""
@@ -78,7 +74,7 @@ async def wapiti_scan_full(request: ScanRequest) -> dict:
     """Launches a wapiti scan with user-defined configurations"""
     pass
 
-
+#TODO: Active and Passive scanning should be collapsed into a singular endpoint, the scan type should be defined in ScanRequest.config.scanType
 @app.post("/api/v1/zap/scan/passive")
 async def zap_passive_scan(request: ScanRequest) -> dict:
     """Starts a passive zap scan"""
@@ -135,5 +131,9 @@ async def zap_full_scan(request: ScanRequest) -> dict:
 
 @app.post("/api/v1/scan/")
 async def scan(request: ScanRequest) -> dict:
-    """Starts multiple scans using all tools (Wapiti and Zap) with user-defined configurations"""
+    """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with pre-defined configurations"""
     pass
+
+@app.post("/api/v1/scan/full")
+async def scan_full(request: ScanRequest) -> dict:
+    """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with user-defined configurations"""
