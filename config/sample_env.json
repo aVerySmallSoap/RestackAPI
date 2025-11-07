@@ -5,8 +5,9 @@
     "zap": ""
   },
   "report_paths" : {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports",
+    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\wapiti",
     "whatweb": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\whatweb",
-    "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap"
+    "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap",
+    "full": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\full_scan"
   }
 }

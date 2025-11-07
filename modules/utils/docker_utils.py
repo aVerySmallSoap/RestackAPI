@@ -28,13 +28,13 @@ def update_vuln_search_service():
     client = docker.from_env()
     client.containers.run("search_vulns", auto_remove=True, tty=True, command=["./search_vulns.py", "-u"])
 
-def vuln_search_query(technology: str|list[dict]):
+def vuln_search_query(technology: str|list[dict], session_name: str):
     """Queries vulnerabilities found in a fingerprinted technology.
     :param technology: a technology or list of technologies"""
     if technology is None or len(technology) == 0:
         return
     _temp = []
-    _commands = ["./search_vulns.py", "--include-single-version-vulns", "-f", "json", "-o", "/home/search_vulns/reports/report.json"] #TODO: Change report name to a custom one that is related to the scan
+    _commands = ["./search_vulns.py", "--include-single-version-vulns", "-f", "json", "-o", f"/home/search_vulns/reports/{session_name}.json"]
     if type(technology) is str:
         _temp.append(f"{technology}")
     else:

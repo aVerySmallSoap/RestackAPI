@@ -8,11 +8,10 @@ from modules.utils.load_configs import DEV_ENV
 
 
 class WhatWebAdapter(IAsyncScannerAdapter):
-    _local_report_path = "./temp/whatweb/report.json"
 
     async def start_scan(self, url:str, config: dict = None):
         self._check_files()
-        await self._launch_mounted_container(url)
+        await self._launch_mounted_container(url, config["path"])
 
     def stop_scan(self, scan_id: str | int) -> int:
         """TBD"""
@@ -22,7 +21,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         """TBD"""
         pass
 
-    def parse_results(self, path: str = None) -> dict:
+    def parse_results(self, path: str) -> dict:
         #TODO: Make use of session names and session IDs
         _excluded = ["UncommonHeaders", "Open-Graph-Protocol", "Title", "Frame", "Script"]
         _trivial = ["Email", "Script", "IP", "Country", "HTTPServer"]
@@ -30,7 +29,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         _tech = []
         _cookies = []
         _extra = []
-        with open("temp/whatweb/report.json", "r+") as _: #TODO: Change report name to a custom one that is related to the scan
+        with open(path, "r+") as _:
             report = json.load(_)
             print(report)
             if len(report) <= 0 or report is None:
@@ -55,11 +54,11 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                 _tech.append({plugin: content})
         return {"data": [_versioned_tech, _tech, _cookies, _extra]}
 
-    async def _launch_mounted_container(self, url: str):
+    async def _launch_mounted_container(self, url: str, session_name: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "-a 1", "--verbose", "--log-json", "./reports/report.json", url], #TODO: Change report name to a custom one that is related to the scan
+                              ["./whatweb", "-a 1", "--verbose", "--log-json", f"./reports/{session_name}.json", url],
                               volumes={
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True,
@@ -80,7 +79,5 @@ class WhatWebAdapter(IAsyncScannerAdapter):
 
     def _check_files(self):
         """Checks to see if a file exists, if not, creates a new file; else, remove the files contents"""
-        if not os.path.isfile(self._local_report_path):
-            open(self._local_report_path, "x").close()
-        elif os.path.getsize(self._local_report_path) > 0:
-            open(self._local_report_path, "w").close()
+        if not os.path.isdir(DEV_ENV["report_paths"]["whatweb"]):
+            os.makedirs(DEV_ENV["report_paths"]["whatweb"])

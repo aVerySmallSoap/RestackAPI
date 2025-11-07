@@ -5,3 +5,4 @@ class ScannerTypes(Enum):
     WHATWEB = 2
     ZAP = 3
     ZAP_AUTOMATION = 4 # Future feature
+    FULL = 5
