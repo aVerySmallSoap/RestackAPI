@@ -22,6 +22,7 @@ class ScannerEngine(metaclass=Singleton):
     _wapiti_path = DEV_ENV["report_paths"]["wapiti"]
     _whatweb_path = DEV_ENV["report_paths"]["whatweb"]
     _zap_path = DEV_ENV["report_paths"]["zap"]
+    _full_scan_path = DEV_ENV["report_paths"]["full_scan"]
 
     def enqueue_session(self, scanner_type: ScannerTypes, start_time: datetime):
         self._enqueue_name(start_time)
@@ -30,22 +31,29 @@ class ScannerEngine(metaclass=Singleton):
     def dequeue_session(self):
         self._ScanQueue.task_done()
 
-    def _enqueue_name(self, scan_time: datetime):
+    def enqueue_name(self, scan_time: datetime):
         self._NameQueue.put(scan_time.strftime("%Y%m%d_%I-%M-%S"))
 
-    def _dequeue_name(self) -> str:
+    def dequeue_name(self) -> str:
         return self._NameQueue.get()
 
-    def generate_file(self, scanner_type: ScannerTypes) -> str:
-        """Generates the json file for the reports.
-        :param scanner_type: Type of scanner"""
+    def generate_file(self, scanner_type: ScannerTypes, path: str = None) -> str:
+        """Generates the session name for the reports. The ``path`` parameter is used to override the default path check.
+        :param scanner_type: Type of scanner
+        :param path: Optional path to save the reports
+        :return: The file path with the session name
+        """
+        if path is not None:
+            return path
         match scanner_type:
             case ScannerTypes.WAPITI:
-                return f"{self._wapiti_path}\\{self._dequeue_name()}.json"
+                return f"{self._wapiti_path}\\{self.dequeue_name()}.json"
             case ScannerTypes.WHATWEB:
-                return f"{self._whatweb_path}\\{self._dequeue_name()}.json"
+                return f"{self._whatweb_path}\\{self.dequeue_name()}.json"
             case ScannerTypes.ZAP:
-                return f"{self._zap_path}\\{self._dequeue_name()}.json"
+                return f"{self._zap_path}\\{self.dequeue_name()}.json"
+            case ScannerTypes.FULL:
+                return f"{self._full_scan_path}\\{self.dequeue_name()}.json"
             case _:
                 return ""
 
