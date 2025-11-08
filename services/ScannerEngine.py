@@ -25,7 +25,7 @@ class ScannerEngine(metaclass=Singleton):
     _full_scan_path = DEV_ENV["report_paths"]["full_scan"]
 
     def enqueue_session(self, scanner_type: ScannerTypes, start_time: datetime):
-        self._enqueue_name(start_time)
+        self.enqueue_name(start_time)
         self._ScanQueue.put({"scanner": scanner_type, "date": start_time})
 
     def dequeue_session(self):

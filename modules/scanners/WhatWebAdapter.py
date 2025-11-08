@@ -11,7 +11,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
 
     async def start_scan(self, url:str, config: dict = None):
         self._check_files()
-        await self._launch_mounted_container(url, config["path"])
+        await self._launch_mounted_container(url, config["session_name"])
 
     def stop_scan(self, scan_id: str | int) -> int:
         """TBD"""

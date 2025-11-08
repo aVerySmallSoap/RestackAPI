@@ -61,7 +61,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _URL = check_url_local_test(str(request.url))
     _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
     report = _wapiti_scanner.parse_results(_wapiti_path)  # TODO: Change how the DB reads this
-    await _whatweb_scanner.start_scan(_URL, {"path": _whatweb_path})
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_wapiti_path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
@@ -94,7 +94,7 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _URL = check_url_local_test(str(request.url))
     _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.PASSIVE, "apikey": "test"})
     report = _zap_scanner.parse_results(_zap_path)
-    await _whatweb_scanner.start_scan(_URL, {"path": _whatweb_path})
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
@@ -121,7 +121,7 @@ async def zap_active_scan(request: ScanRequest) -> dict:
     _URL = check_url_local_test(str(request.url))
     _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
     report = _zap_scanner.parse_results(_zap_path)
-    await _whatweb_scanner.start_scan(_URL, {"path": _whatweb_path})
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
@@ -161,7 +161,7 @@ async def scan(request: ScanRequest) -> dict:
     _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
     _wapiti_result = _wapiti_scanner.parse_results(_wapiti_path)
     # WhatWeb scan
-    await _whatweb_scanner.start_scan(_URL, {"path": _whatweb_path})
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     # SearchVulns Query
         # TODO: Implement
