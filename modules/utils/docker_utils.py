@@ -1,4 +1,9 @@
+import json
+
 import docker
+
+from modules.utils.load_configs import DEV_ENV
+
 
 def start_manual_zap_service(config: dict):
     client = docker.from_env()
@@ -23,14 +28,17 @@ def start_whatweb_service(config: dict | None):
     """TBD"""
     pass
 
-def update_vuln_search_service():
+async def update_vuln_search_service():
     """Updates the search_vuln database in docker"""
     client = docker.from_env()
-    client.containers.run("search_vulns", auto_remove=True, tty=True, command=["./search_vulns.py", "-u"])
+    client.containers.run("search_vulns", name="search_vulns", tty=True, command=["./search_vulns.py", "-u"])
 
 def vuln_search_query(technology: str|list[dict], session_name: str):
-    """Queries vulnerabilities found in a fingerprinted technology.
-    :param technology: a technology or list of technologies"""
+    """
+    Queries vulnerabilities found in a fingerprinted technology.
+    :param technology: a technology or list of technologies
+    :param session_name: name of the session
+    """
     if technology is None or len(technology) == 0:
         return
     _temp = []
@@ -52,10 +60,27 @@ def vuln_search_query(technology: str|list[dict], session_name: str):
     #Can be changed to a more bash environment where we do docker exec into a running container with the command
     #This can incur less overhead of starting a new container and monitor the health of the running one.
     client = docker.from_env()
-    client.containers.run(
-        "search_vulns",
-        auto_remove=True,
-        tty=True,
-        volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\search_vulns": {"bind": "/home/search_vulns/reports","mode": "rw"}}, #TODO: Change path to ENV
-        command=_commands,
-    )
+    containers = client.containers.list(all=True)
+    if len(containers) > 0:
+        for container in containers:
+            if container.name == "search_vulns" and container.status != "running":
+                container.start()
+                container.exec_run(_commands)
+    else:
+        client.containers.run(
+            "search_vulns",
+            tty=True,
+            volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\search_vulns": {"bind": "/home/search_vulns/reports","mode": "rw"}}, #TODO: Change path to ENV
+            command=_commands,
+        )
+
+def parse_query(session_name:str = None) -> dict:
+    with open(f"{DEV_ENV['report_paths']['searchVulns']}\\{session_name}.json","r") as f:
+        queries = json.load(f)
+        _returnable = {"found": {}, "not_found": []}
+        for key, value in queries.items():
+            if type(value) is list:
+                _returnable["found"][key] = value
+            else:
+                _returnable["not_found"].append({key: "No vulnerabilities found"})
+        return _returnable

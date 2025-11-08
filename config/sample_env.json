@@ -8,6 +8,7 @@
     "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\wapiti",
     "whatweb": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\whatweb",
     "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap",
+    "searchVulns": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\search_vulns",
     "full_scan": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\full_scan"
   }
 }

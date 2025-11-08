@@ -1,7 +1,8 @@
 import time
 from datetime import datetime
 
-from fastapi import FastAPI
+import fastapi
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, AnyUrl
 
@@ -14,8 +15,9 @@ from modules.scanners.WhatWebAdapter import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
-from modules.utils.docker_utils import start_manual_zap_service
+from modules.utils.docker_utils import start_manual_zap_service, vuln_search_query, update_vuln_search_service, parse_query
 from modules.utils.check_dir import check_directories
+from modules.analytics.vulnerability_analysis import analyze_results
 
 # == TESTING MODULES ==
 from modules.utils.DEV_utils import check_url_local_test
@@ -23,9 +25,9 @@ from modules.utils.DEV_utils import check_url_local_test
 # == END OF TESTING MODULES==
 
 # == TEST WEBSITES ==
-# https://public-firing-range.appspot.com
 # https://github.com/WebGoat/WebGoat
 # https://github.com/juice-shop/juice-shop
+# https://github.com/OWASP-Benchmark/BenchmarkPython
 # == END OF TESTING WEBSITES ==
 
 _db = Database()
@@ -75,7 +77,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
 @app.post("/api/v1/wapiti/scan/full")
 async def wapiti_scan_full(request: ScanRequest) -> dict:
     """Launches a wapiti scan with user-defined configurations"""
-    pass
+    raise HTTPException(status_code=500, detail="Not Yet Implemented")
 
 #TODO: Active and Passive scanning should be collapsed into a singular endpoint, the scan type should be defined in ScanRequest.config.scanType
 @app.post("/api/v1/zap/scan/passive")
@@ -134,7 +136,7 @@ async def zap_active_scan(request: ScanRequest) -> dict:
 @app.post("/api/v1/zap/scan/full")
 async def zap_full_scan(request: ScanRequest) -> dict:
     """Starts both a passive and active zap scan with user-defined configurations"""
-    pass
+    raise HTTPException(status_code=500, detail="Not Yet Implemented")
 
 @app.post("/api/v1/scan/")
 async def scan(request: ScanRequest) -> dict:
@@ -164,22 +166,26 @@ async def scan(request: ScanRequest) -> dict:
     await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     # SearchVulns Query
-        # TODO: Implement
-        # vulnerable_tech = tech_cve_query(_whatweb_results)
+    _query_results = {}
+    await update_vuln_search_service()
+    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+        vuln_search_query(_whatweb_results["data"][0], session_name)
+        #TODO: parse query results here
+        _query_results = parse_query(session_name)
+    else:
+        _query_results = None
     # Analytics
-        # TODO: Implement
-        # combined_results = analyze(_zap_result, _wapiti_result)
+    _results = analyze_results(_wapiti_result, _zap_result)
     # DB write
-        # TODO: write to database
+        # TODO: Implement
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-        # TODO: Implement
     if not _whatweb_results.__contains__("error"):
-        # TODO: "merged" should contain be combined_results from the analytics of both zap and wapiti results
-        return {"data": {"compiled": [_zap_result, _wapiti_result], "merged": ""}, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": ""}, "scan_time": scan_time}
+        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results}, "scan_time": scan_time}
     else:
-        return {"data": {"compiled": [_zap_result, _wapiti_result], "merged": ""}, "plugins": {"fingerprinted": _whatweb_results, "patchable": ""}, "scan_time": scan_time}
+        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results}, "scan_time": scan_time}
 
 @app.post("/api/v1/scan/full")
 async def scan_full(request: ScanRequest) -> dict:
     """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with user-defined configurations"""
+    raise HTTPException(status_code=500, detail="Not Yet Implemented")
