@@ -1,4 +1,5 @@
 import json
+import time
 
 import docker
 
@@ -31,16 +32,22 @@ def start_whatweb_service(config: dict | None):
 async def update_vuln_search_service():
     """Updates the search_vuln database in docker"""
     client = docker.from_env()
+    containers = client.containers.list(all=True)
+    for container in containers:
+        if container.name == "search_vulns":
+            container.start()
+            container.exec_run(["./search_vulns.py", "-u"])
+            return
     client.containers.run("search_vulns", name="search_vulns", tty=True, command=["./search_vulns.py", "-u"])
 
-def vuln_search_query(technology: str|list[dict], session_name: str):
+def vuln_search_query(technology: str|list[dict], session_name: str) -> bool:
     """
     Queries vulnerabilities found in a fingerprinted technology.
     :param technology: a technology or list of technologies
     :param session_name: name of the session
     """
     if technology is None or len(technology) == 0:
-        return
+        return False
     _temp = []
     _commands = ["./search_vulns.py", "--include-single-version-vulns", "-f", "json", "-o", f"/home/search_vulns/reports/{session_name}.json"]
     if type(technology) is str:
@@ -61,11 +68,22 @@ def vuln_search_query(technology: str|list[dict], session_name: str):
     #This can incur less overhead of starting a new container and monitor the health of the running one.
     client = docker.from_env()
     containers = client.containers.list(all=True)
+
+    if len(_commands) == 0: # No fingerprinted technology with versions are found
+        return False
+
     if len(containers) > 0:
         for container in containers:
             if container.name == "search_vulns" and container.status != "running":
                 container.start()
                 container.exec_run(_commands)
+                return True
+            elif container.name == "search_vulns" and container.status == "running":
+                while container.status == "running": # Wait for the container to finish updating
+                    time.sleep(5)
+                container.exec_run(_commands)
+                return True
+        return False
     else:
         client.containers.run(
             "search_vulns",
@@ -73,6 +91,7 @@ def vuln_search_query(technology: str|list[dict], session_name: str):
             volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\search_vulns": {"bind": "/home/search_vulns/reports","mode": "rw"}}, #TODO: Change path to ENV
             command=_commands,
         )
+        return True
 
 def parse_query(session_name:str = None) -> dict:
     with open(f"{DEV_ENV['report_paths']['searchVulns']}\\{session_name}.json","r") as f:

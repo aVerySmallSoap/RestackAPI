@@ -153,6 +153,7 @@ async def scan(request: ScanRequest) -> dict:
     _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
     config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
+    await update_vuln_search_service()
     # scanning
     _URL = check_url_local_test(str(request.url)) # Check if the app is hosted locally
     # url_context = zap.pscan.urls(url) # extract zap crawl and seed wapiti
@@ -167,11 +168,12 @@ async def scan(request: ScanRequest) -> dict:
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     # SearchVulns Query
     _query_results = {}
-    await update_vuln_search_service()
     if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
-        vuln_search_query(_whatweb_results["data"][0], session_name)
-        #TODO: parse query results here
-        _query_results = parse_query(session_name)
+        has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
+        if has_results:
+            _query_results = parse_query(session_name)
+        else:
+            _query_results = None
     else:
         _query_results = None
     # Analytics
