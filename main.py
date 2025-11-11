@@ -43,9 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
 )
 
+
 class ScanRequest(BaseModel):
     url: AnyUrl
-    config: dict|None = None
+    config: dict | None = None
+
 
 @app.post("/api/v1/wapiti/scan/quick")
 async def wapiti_scan(request: ScanRequest) -> dict:
@@ -56,113 +58,14 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _wapiti_scanner = WapitiAdapter()
     _whatweb_scanner = WhatWebAdapter()
     _scannerEngine.enqueue_session(ScannerTypes.WAPITI, _scan_start)
-    session_name = _scannerEngine.dequeue_name() # Get the latest time session and use it as the file name
-    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
-    _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
-    config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
-    # scanning
-    _URL = check_url_local_test(str(request.url))
-    _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
-    report = _wapiti_scanner.parse_results(_wapiti_path)  # TODO: Change how the DB reads this
-    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
-    _whatweb_results = _whatweb_scanner.parse_results(_wapiti_path)
-    time_end = time.perf_counter()
-    scan_time = time_end - time_start
-    _db.insert_wapiti_quick_report(_scan_start, _wapiti_path, _whatweb_results["raw"], report, scan_time) # Rewrite reading of report variable
-    if not _whatweb_results.__contains__("error"):
-        return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
-    else:
-        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
-
-
-@app.post("/api/v1/wapiti/scan/full")
-async def wapiti_scan_full(request: ScanRequest) -> dict:
-    """Launches a wapiti scan with user-defined configurations"""
-    raise HTTPException(status_code=500, detail="Not Yet Implemented")
-
-#TODO: Active and Passive scanning should be collapsed into a singular endpoint, the scan type should be defined in ScanRequest.config.scanType
-@app.post("/api/v1/zap/scan/passive")
-async def zap_passive_scan(request: ScanRequest) -> dict:
-    """Starts a passive zap scan"""
-    time_start = time.perf_counter()
-    # init
-    _scan_start = datetime.now()
-    _zap_scanner = ZapAdapter({"apikey": "test"})
-    _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
-    session_name = _scannerEngine.dequeue_name() # Get the latest time session and use it as the file name
-    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
-    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
-    # scanning
-    _URL = check_url_local_test(str(request.url))
-    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.PASSIVE, "apikey": "test"})
-    report = _zap_scanner.parse_results(_zap_path)
-    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
-    _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
-    time_end = time.perf_counter()
-    scan_time = time_end - time_start
-    _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results["data"], report, scan_time, _URL)
-    if not _whatweb_results.__contains__("error"):
-        return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
-    else:
-        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
-
-
-@app.post("/api/v1/zap/scan/active")
-async def zap_active_scan(request: ScanRequest) -> dict:
-    """Starts an active zap scan"""
-    time_start = time.perf_counter()
-    # init
-    _scan_start = datetime.now()
-    _zap_scanner = ZapAdapter({"apikey": "test"})
-    _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
-    session_name = _scannerEngine.dequeue_name() # Get the latest time session and use it as the file name
-    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
-    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
-    # scanning
-    _URL = check_url_local_test(str(request.url))
-    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
-    report = _zap_scanner.parse_results(_zap_path)
-    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
-    _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
-    time_end = time.perf_counter()
-    scan_time = time_end - time_start
-    _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results["data"], report, scan_time, _URL)
-    if not _whatweb_results.__contains__("error"):
-        return {"data": report, "plugins": _whatweb_results["data"], "scan_time": scan_time}
-    else:
-        return {"data": report, "plugins": _whatweb_results, "scan_time": scan_time}
-
-@app.post("/api/v1/zap/scan/full")
-async def zap_full_scan(request: ScanRequest) -> dict:
-    """Starts both a passive and active zap scan with user-defined configurations"""
-    raise HTTPException(status_code=500, detail="Not Yet Implemented")
-
-@app.post("/api/v1/scan/")
-async def scan(request: ScanRequest) -> dict:
-    """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with pre-defined configurations"""
-    time_start = time.perf_counter()
-    # init
-    _scan_start = datetime.now()
-    _zap_scanner = ZapAdapter({"apikey": "test"})
-    _wapiti_scanner = WapitiAdapter()
-    _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerTypes.FULL, _scan_start)
-    session_name = _scannerEngine.dequeue_name() # Get the latest time session and use it as the file name
-    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
+    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
     _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
     config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
     # scanning
-    _URL = check_url_local_test(str(request.url)) # Check if the app is hosted locally
-    # url_context = zap.pscan.urls(url) # extract zap crawl and seed wapiti
-    # Zap scan
-    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
-    _zap_result = _zap_scanner.parse_results(_zap_path)
-    # Wapiti scan
+    _URL = check_url_local_test(str(request.url))
     _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
-    _wapiti_result = _wapiti_scanner.parse_results(_wapiti_path)
+    _report = _wapiti_scanner.parse_results(_wapiti_path)
     # WhatWeb scan
     await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
@@ -176,16 +79,169 @@ async def scan(request: ScanRequest) -> dict:
             _query_results = None
     else:
         _query_results = None
+    time_end = time.perf_counter()
+    scan_time = time_end - time_start
+    _db.insert_wapiti_quick_report(_scan_start, _wapiti_path, _whatweb_results["raw"], _report,
+                                   scan_time)  # Rewrite reading of report variable
+    if not _whatweb_results.__contains__("error"):
+        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
+                "scan_time": scan_time}
+    else:
+        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+                "scan_time": scan_time}
+
+
+@app.post("/api/v1/wapiti/scan/full")
+async def wapiti_scan_full(request: ScanRequest) -> dict:
+    """Launches a wapiti scan with user-defined configurations"""
+    raise HTTPException(status_code=500, detail="Not Yet Implemented")
+
+
+# TODO: Active and Passive scanning should be collapsed into a singular endpoint, the scan type should be defined in ScanRequest.config.scanType
+@app.post("/api/v1/zap/scan/passive")
+async def zap_passive_scan(request: ScanRequest) -> dict:
+    """Starts a passive zap scan"""
+    time_start = time.perf_counter()
+    # init
+    _scan_start = datetime.now()
+    _zap_scanner = ZapAdapter({"apikey": "test"})
+    _whatweb_scanner = WhatWebAdapter()
+    _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
+    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
+    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
+
+    # scanning
+    _URL = check_url_local_test(str(request.url))
+    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.PASSIVE, "apikey": "test"})
+    _report = _zap_scanner.parse_results(_zap_path)
+
+    # WhatWeb scan
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
+    _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
+    # SearchVulns Query
+    _query_results = {}
+    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+        has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
+        if has_results:
+            _query_results = parse_query(session_name)
+        else:
+            _query_results = None
+    else:
+        _query_results = None
+
+    time_end = time.perf_counter()
+    scan_time = time_end - time_start
+    _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results["data"], _report, scan_time, _URL)
+    if not _whatweb_results.__contains__("error"):
+        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
+                "scan_time": scan_time}
+    else:
+        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+                "scan_time": scan_time}
+
+
+@app.post("/api/v1/zap/scan/active")
+async def zap_active_scan(request: ScanRequest) -> dict:
+    """Starts an active zap scan"""
+    time_start = time.perf_counter()
+    # init
+    _scan_start = datetime.now()
+    _zap_scanner = ZapAdapter({"apikey": "test"})
+    _whatweb_scanner = WhatWebAdapter()
+    _scannerEngine.enqueue_session(ScannerTypes.ZAP, _scan_start)
+    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
+    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
+
+    # scanning
+    _URL = check_url_local_test(str(request.url))
+    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
+    _report = _zap_scanner.parse_results(_zap_path)
+
+    # WhatWeb scan
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
+    _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
+    # SearchVulns Query
+    _query_results = {}
+    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+        has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
+        if has_results:
+            _query_results = parse_query(session_name)
+        else:
+            _query_results = None
+    else:
+        _query_results = None
+
+    time_end = time.perf_counter()
+    scan_time = time_end - time_start
+    _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results["data"], _report, scan_time, _URL)
+    if not _whatweb_results.__contains__("error"):
+        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
+                "scan_time": scan_time}
+    else:
+        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+                "scan_time": scan_time}
+
+
+@app.post("/api/v1/zap/scan/full")
+async def zap_full_scan(request: ScanRequest) -> dict:
+    """Starts both a passive and active zap scan with user-defined configurations"""
+    raise HTTPException(status_code=500, detail="Not Yet Implemented")
+
+
+@app.post("/api/v1/scan/")
+async def scan(request: ScanRequest) -> dict:
+    """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with pre-defined configurations"""
+    time_start = time.perf_counter()
+    # init
+    _scan_start = datetime.now()
+    _zap_scanner = ZapAdapter({"apikey": "test"})
+    _wapiti_scanner = WapitiAdapter()
+    _whatweb_scanner = WhatWebAdapter()
+    _scannerEngine.enqueue_session(ScannerTypes.FULL, _scan_start)
+    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
+    _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
+    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
+    config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
+    # scanning
+    _URL = check_url_local_test(str(request.url))  # Check if the app is hosted locally
+    # url_context = zap.pscan.urls(url) # extract zap crawl and seed wapiti
+    # Zap scan
+    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
+    _zap_result = _zap_scanner.parse_results(_zap_path)
+    # Wapiti scan
+    _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
+    _wapiti_result = _wapiti_scanner.parse_results(_wapiti_path)
+
+    # WhatWeb scan
+    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
+    _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
+    # SearchVulns Query
+    _query_results = {}
+    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+        has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
+        if has_results:
+            _query_results = parse_query(session_name)
+        else:
+            _query_results = None
+    else:
+        _query_results = None
+
     # Analytics
     _results = analyze_results(_wapiti_result, _zap_result)
     # DB write
-        # TODO: Implement
+    # TODO: Implement
     time_end = time.perf_counter()
     scan_time = time_end - time_start
     if not _whatweb_results.__contains__("error"):
-        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results}, "scan_time": scan_time}
+        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
+                "scan_time": scan_time}
     else:
-        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results}, "scan_time": scan_time}
+        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+                "scan_time": scan_time}
+
 
 @app.post("/api/v1/scan/full")
 async def scan_full(request: ScanRequest) -> dict:
