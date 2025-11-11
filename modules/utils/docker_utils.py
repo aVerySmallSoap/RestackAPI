@@ -2,6 +2,7 @@ import json
 import time
 
 import docker
+from zapv2 import ZAPv2
 
 from modules.utils.load_configs import DEV_ENV
 
@@ -9,17 +10,33 @@ from modules.utils.load_configs import DEV_ENV
 def start_manual_zap_service(config: dict):
     client = docker.from_env()
     containers = client.containers.list(all=True)
-    if len(containers) > 0:
-        for container in containers:
-            if container.name == "zap" and container.status != "running":
-                container.start()
-    else:
-        client.containers.run("zaproxy/zap-stable",
-                              ["zap.sh", "-daemon", "-host", "0.0.0.0", "-config", "api.addrs.addr.name=.*", "-config","api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}"],
+    for container in containers:
+        if container.name == "zap" and container.status != "running":
+            print("Residual ZAP container found! Cleaning up...")
+            container.remove(force=True)
+        elif container.name == "zap" and container.status == "running":
+            return
+    print("Starting ZAP service...")
+    client.containers.run("zaproxy/zap-stable",
+                        ["zap.sh", "-daemon", "-Xmx12g", "-host", "0.0.0.0", "-config", "api.addrs.addr.name=.*", "-config","api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}"],
                               name="zap",
                               volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\zap": {"bind": "/home/zap","mode": "rw"}}, #TODO: Change path to ENV
                               ports={"8080/tcp": 8080},
                               detach=True)
+
+def update_zap_service():
+    # This function should always assume that zap is running. This will only run on start-up
+    client = docker.from_env()
+    containers = client.containers.list(all=True)
+    print("Updating zap service")
+    for container in containers:
+        if container.name == "zap" and container.status == "running":
+            try:
+                time.sleep(20) # Wait for the service to warmup and start
+                zap = ZAPv2(apikey="test", proxies={"http": "http://127.0.0.1:8080"})
+                zap.autoupdate.download_latest_release()
+            except Exception as e:
+                print(f"We waited for 30 seconds but got: \n {e}")
 
 def start_automatic_zap_service(config: dict):
     """TBD"""
@@ -28,17 +45,6 @@ def start_automatic_zap_service(config: dict):
 def start_whatweb_service(config: dict | None):
     """TBD"""
     pass
-
-async def update_vuln_search_service():
-    """Updates the search_vuln database in docker"""
-    client = docker.from_env()
-    containers = client.containers.list(all=True)
-    for container in containers:
-        if container.name == "search_vulns":
-            container.start()
-            container.exec_run(["./search_vulns.py", "-u"])
-            return
-    client.containers.run("search_vulns", name="search_vulns", tty=True, command=["./search_vulns.py", "-u"])
 
 def vuln_search_query(technology: str|list[dict], session_name: str) -> bool:
     """
@@ -49,7 +55,7 @@ def vuln_search_query(technology: str|list[dict], session_name: str) -> bool:
     if technology is None or len(technology) == 0:
         return False
     _temp = []
-    _commands = ["./search_vulns.py", "--include-single-version-vulns", "-f", "json", "-o", f"/home/search_vulns/reports/{session_name}.json"]
+    _commands = ["./search_vulns.py", "-u", "--include-single-version-vulns", "-f", "json", "-o", f"/home/search_vulns/reports/{session_name}.json"]
     if type(technology) is str:
         _temp.append(f"{technology}")
     else:
@@ -72,26 +78,22 @@ def vuln_search_query(technology: str|list[dict], session_name: str) -> bool:
     if len(_commands) == 0: # No fingerprinted technology with versions are found
         return False
 
-    if len(containers) > 0:
-        for container in containers:
-            if container.name == "search_vulns" and container.status != "running":
-                container.start()
-                container.exec_run(_commands)
-                return True
-            elif container.name == "search_vulns" and container.status == "running":
-                while container.status == "running": # Wait for the container to finish updating
-                    time.sleep(5)
-                container.exec_run(_commands)
-                return True
-        return False
-    else:
+    try:
+        if len(containers) > 0:
+            for container in containers:
+                if container.name == "search_vulns" and container.status != "running":
+                    container.remove()
         client.containers.run(
-            "search_vulns",
-            tty=True,
-            volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\search_vulns": {"bind": "/home/search_vulns/reports","mode": "rw"}}, #TODO: Change path to ENV
-            command=_commands,
-        )
+                "search_vulns",
+                tty=True,
+                name="search_vulns",
+                volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\search_vulns": {"bind": "/home/search_vulns/reports", "mode":"rw"}}, #TODO: Change path to ENV
+                command=_commands,
+            )
         return True
+    except Exception as e:
+        print(f"An error occurred: \n {e}")
+        return False
 
 def parse_query(session_name:str = None) -> dict:
     with open(f"{DEV_ENV['report_paths']['searchVulns']}\\{session_name}.json","r") as f:

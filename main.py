@@ -1,7 +1,6 @@
 import time
 from datetime import datetime
 
-import fastapi
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, AnyUrl
@@ -15,7 +14,8 @@ from modules.scanners.WhatWebAdapter import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
-from modules.utils.docker_utils import start_manual_zap_service, vuln_search_query, update_vuln_search_service, parse_query
+from modules.utils.docker_utils import start_manual_zap_service, vuln_search_query, \
+    parse_query, update_zap_service
 from modules.utils.check_dir import check_directories
 from modules.analytics.vulnerability_analysis import analyze_results
 
@@ -32,6 +32,7 @@ from modules.utils.DEV_utils import check_url_local_test
 
 _db = Database()
 start_manual_zap_service({"apikey": "test"})
+update_zap_service()
 _scannerEngine = ScannerEngine()
 check_directories()
 
@@ -153,7 +154,6 @@ async def scan(request: ScanRequest) -> dict:
     _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
     config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
-    await update_vuln_search_service()
     # scanning
     _URL = check_url_local_test(str(request.url)) # Check if the app is hosted locally
     # url_context = zap.pscan.urls(url) # extract zap crawl and seed wapiti
