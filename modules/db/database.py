@@ -42,13 +42,12 @@ class Database:
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
-            # TODO: raw_data access is now in SARIF
             report_id = str(uuid.uuid4())
             report = Report(
                 id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                scan_type="Quick Scan",
-                scanner="Wapiti",
+                scan_type="wapiti scan",
+                scanner="wapiti",
                 path=file_path,
                 total_vulnerabilities=raw_data["vulnerability_count"],
                 critical_count=raw_data["critical_vulnerabilities"]
@@ -64,8 +63,8 @@ class Database:
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                scanner="Wapiti",
-                scan_type="Quick Scan",
+                scanner="wapiti",
+                scan_type="wapiti scan",
                 data=raw_data["parsed"],
                 crawl_depth=raw_data["extra"]["crawled_pages_nbr"],
                 scan_duration=floor(duration),
@@ -83,13 +82,12 @@ class Database:
         _data_dump = json.dumps(raw_data)
         _plugins_dump = json.dumps(plugins)
         with Session(engine) as session:
-            # TODO: raw_data access is now in SARIF, need to change how it is accessed
             report_id = str(uuid.uuid4())
             report = Report(
                 id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                scan_type="Zap Scan",
-                scanner="Zap",
+                scan_type="zap scan",
+                scanner="zap",
                 path=file_path,
                 total_vulnerabilities=len(raw_data["runs"][0]["results"]),
                 critical_count=utils.critical_counter(raw_data)
@@ -105,8 +103,8 @@ class Database:
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                scanner="Zap",
-                scan_type="Zap Scan",
+                scanner="zap",
+                scan_type="zap scan",
                 data=_data_dump,
                 crawl_depth=0, #TODO: fetch crawler results and add data here
                 scan_duration=floor(duration),
@@ -116,6 +114,49 @@ class Database:
             _tables.append(scan)
             session.add_all(_tables)
             self._insert_zap_vulnerabilities(report_id, timestamp, raw_data, session)
+            session.commit()
+
+    def insert_scan_report(self, timestamp: datetime, file_path: str, plugins:list, \
+                           zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):
+        engine = self._check_engine()
+        _tables = []
+        _zap_dump = json.dumps(zap_raw_data)
+        _wapiti_dump = json.dumps(wapiti_raw_data)
+        _plugins_dump = json.dumps(plugins)
+        with Session(engine) as session:
+            report_id = str(uuid.uuid4())
+            report = Report(
+                id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                scan_type="full scan",
+                scanner="all",
+                path=file_path,
+                total_vulnerabilities=len(analytics_data["union"]),
+                critical_count=utils.critical_counter(analytics_data["union"]),
+            )
+            _tables.append(report)
+            tech_disc = TechDiscovery(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                data=_plugins_dump
+            ) # Search_vulns table??
+            scan = Scan(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                scanner="all",
+                scan_type="full scan",
+                data=analytics_data["union"],
+                crawl_depth=0,  # TODO: fetch crawler results and add data here
+                scan_duration=floor(duration),
+                target_url=url
+            )
+            _tables.append(tech_disc)
+            _tables.append(scan)
+            session.add_all(_tables)
+            self._insert_zap_vulnerabilities(report_id, timestamp, zap_raw_data, session)
+            self._insert_wapiti_vulnerabilities(report_id, timestamp, wapiti_raw_data, session)
             session.commit()
 
     @staticmethod
@@ -129,7 +170,7 @@ class Database:
                 id=str(uuid.uuid4()),
                 report_id=parent_report_id,
                 scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
-                scanner="Zap",
+                scanner="zap",
                 vulnerability_type=_rule["name"],
                 severity=_rule["properties"]["risk"],
                 description=_rule["fullDescription"]["text"],
@@ -151,6 +192,7 @@ class Database:
         _rules = utils.unroll_sarif_rules(raw_data)
         for vulnerability in raw_data["runs"][0]["results"]:
             _rule = _rules.get(vulnerability["ruleId"])
+            _json_dump = json.dumps(vulnerability)
             _severity = vulnerability["level"]
             if str.lower(_severity) == "note":
                 _severity = "Low"
@@ -164,7 +206,7 @@ class Database:
                 id=str(uuid.uuid4()),
                 report_id=parent_report_id,
                 scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
-                scanner="Wapiti",
+                scanner="wapiti",
                 vulnerability_type=_rule["name"],
                 severity= _severity,
                 http_request=vulnerability["properties"]["http_request"],
@@ -173,7 +215,7 @@ class Database:
                 method=vulnerability["properties"]["method"],
                 state="new",
                 confidence="Low",
-                data=json.dumps(vulnerability)
+                data=_json_dump
             )
             _entries.append(_vuln)
         session.add_all(_entries)

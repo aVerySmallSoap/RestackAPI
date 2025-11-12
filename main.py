@@ -230,11 +230,12 @@ async def scan(request: ScanRequest) -> dict:
         _query_results = None
 
     # Analytics
-    _results = analyze_results(_wapiti_result, _zap_result)
-    # DB write
-    # TODO: Implement
+    _results = analyze_results(session_name, _wapiti_result, _zap_result)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
+    # DB write
+    _db.insert_scan_report(_scan_start, f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json",
+                           _whatweb_results["data"], _zap_result, _wapiti_result, _results, scan_time, _URL)
     if not _whatweb_results.__contains__("error"):
         return {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
                 "scan_time": scan_time}
