@@ -13,14 +13,30 @@ def unroll_sarif_rules(sarif_report: dict) -> dict:
         _returnable[rule["id"]] = _lookup_values
     return _returnable
 
-def critical_counter(sarif_report: dict) -> int:
+def critical_counter(sarif_report: dict, rules: dict|list = None) -> int:
     """
     Counts the number of critical vulnerabilities
     """
     count = 0
-    _rules = unroll_sarif_rules(sarif_report)
-    for vulnerability in sarif_report["runs"][0]["results"]:
-        _rule = _rules.get(vulnerability["ruleId"])
-        if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(_rule["properties"]["risk"]) == "critical":
-            count += 1
-    return count
+    print(rules)
+    if rules is None:
+        _rules = unroll_sarif_rules(sarif_report)
+    else:
+        _rules = rules
+    if isinstance(_rules, dict):
+        for vulnerability in sarif_report["runs"][0]["results"]:
+            _rule = _rules.get(vulnerability["ruleId"])
+            if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(_rule["properties"]["risk"]) == "critical":
+                count += 1
+        return count
+    else:
+        for scanner in sarif_report:
+            for vulnerability in scanner:
+                _rule: dict
+                for rule in rules:
+                    if vulnerability["ruleId"] in rule:
+                        _rule = rule.get(vulnerability["ruleId"])
+                        break
+                if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(_rule["properties"]["risk"]) == "critical":
+                    count += 1
+        return count

@@ -10,3 +10,4 @@ requests
 ijson
 zaproxy
 docker
+google-genai
