@@ -26,8 +26,14 @@ def critical_counter(sarif_report: dict, rules: dict|list = None) -> int:
     if isinstance(_rules, dict):
         for vulnerability in sarif_report["runs"][0]["results"]:
             _rule = _rules.get(vulnerability["ruleId"])
-            if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(_rule["properties"]["risk"]) == "critical":
-                count += 1
+            if _rule["properties"].get("risk") is None:
+                # Wapiti
+                if str.lower(_rule["level"]) == "error" or str.lower(_rule["properties"]["risk"]) == "critical":
+                    count += 1
+            else:
+                if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(
+                        _rule["properties"]["risk"]) == "critical":
+                    count += 1
         return count
     else:
         for scanner in sarif_report:
@@ -37,6 +43,12 @@ def critical_counter(sarif_report: dict, rules: dict|list = None) -> int:
                     if vulnerability["ruleId"] in rule:
                         _rule = rule.get(vulnerability["ruleId"])
                         break
-                if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(_rule["properties"]["risk"]) == "critical":
-                    count += 1
+                if _rule["properties"].get("risk") is None:
+                    # Wapiti
+                    if str.lower(_rule["level"]) == "error" or str.lower(_rule["properties"]["risk"]) == "critical":
+                        count += 1
+                else:
+                    if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(
+                            _rule["properties"]["risk"]) == "critical":
+                        count += 1
         return count
