@@ -207,7 +207,7 @@ class Database:
                 report_id=parent_report_id,
                 scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="wapiti",
-                vulnerability_type=_rule["name"],
+                vulnerability_type=_rule["shortDescription"]["text"],
                 severity= _severity,
                 http_request=vulnerability["properties"]["http_request"],
                 endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
@@ -225,3 +225,19 @@ class Database:
         if self._engine is None:
             self._engine = self._check_engine()
         return self._engine
+
+    def get_report_by_id(self, report_id: str):
+        engine = self._check_engine()
+        with Session(engine) as session:
+            report = session.query(Report).filter(Report.id == report_id).first()
+            if not report:
+                return None
+            # Assume SARIF is stored in the path attribute as a file path
+            result = {
+                'id': report.id,
+                'scan_date': report.scan_date,
+                'scan_type': report.scan_type,
+                'scanner': report.scanner.upper() if report.scanner else None,
+                'raw_data': report.path  # path to SARIF file
+            }
+            return result

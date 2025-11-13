@@ -6,6 +6,12 @@ from zapv2 import ZAPv2
 
 from modules.utils.load_configs import DEV_ENV
 
+# == Report paths ==
+_wapiti_path = DEV_ENV["report_paths"]["wapiti"]
+_whatweb_path = DEV_ENV["report_paths"]["whatweb"]
+_zap_path = DEV_ENV["report_paths"]["zap"]
+_full_scan_path = DEV_ENV["report_paths"]["full_scan"]
+_searchVulns_path = DEV_ENV["report_paths"]["searchVulns"]
 
 def start_manual_zap_service(config: dict):
     client = docker.from_env()
@@ -20,7 +26,7 @@ def start_manual_zap_service(config: dict):
     client.containers.run("zaproxy/zap-stable",
                         ["zap.sh", "-daemon", "-Xmx12g", "-host", "0.0.0.0", "-config", "api.addrs.addr.name=.*", "-config","api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}"],
                               name="zap",
-                              volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\zap": {"bind": "/home/zap","mode": "rw"}}, #TODO: Change path to ENV
+                              volumes={f"{_zap_path}": {"bind": "/home/zap","mode": "rw"}}, #TODO: Change path to ENV
                               ports={"8080/tcp": 8080},
                               detach=True)
 
@@ -87,7 +93,7 @@ def vuln_search_query(technology: str|list[dict], session_name: str) -> bool:
                 "search_vulns",
                 tty=True,
                 name="search_vulns",
-                volumes={"D:\\Coding_Projects\\Python\\RestackAPI\\temp\\search_vulns": {"bind": "/home/search_vulns/reports", "mode":"rw"}}, #TODO: Change path to ENV
+                volumes={f"{_searchVulns_path}": {"bind": "/home/search_vulns/reports", "mode":"rw"}},
                 command=_commands,
             )
         return True

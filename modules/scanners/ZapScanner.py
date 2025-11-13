@@ -12,7 +12,7 @@ class ZapAdapter(IScannerAdapter):
     zap: ZAPv2
 
     def __init__(self, config: dict):
-        self.zap = ZAPv2(apikey=config["apikey"], proxies={"http": "http://127.0.0.1:8080"})
+        self.zap = ZAPv2(apikey=config["apikey"], proxies={"http": "127.0.0.1:8080"})
 
     def start_scan(self, url:str, config: dict):
         self._context_lookup(url, config["apikey"])
@@ -106,8 +106,9 @@ class ZapAdapter(IScannerAdapter):
                         _result["level"] = "none"
                 _sarif["runs"][0]["results"].append(_result)
             # Test
-            with open("zap_report.sarif", "w") as out:
-                json.dump(_sarif, out, indent=2)
+            return _sarif
+            # with open("zap_report.sarif", "w") as out:
+            #     json.dump(_sarif, out, indent=2)
             # end test
             return _sarif
 
@@ -145,6 +146,7 @@ class ZapAdapter(IScannerAdapter):
         if additional_context is not None:
             for context in additional_context:
                 self.zap.core.access_url(url=context, followredirects=True)
+
         # Traditional Crawler
         scanId = self.zap.spider.scan(url=target, recurse=True)
         self.zap.spider.set_option_parse_robots_txt(True)
@@ -158,6 +160,7 @@ class ZapAdapter(IScannerAdapter):
                 time.sleep(5)
                 while int(self.zap.spider.status(access_scanId)) < 100:
                     time.sleep(2)
+
         # Ajax Crawler
         self.zap.ajaxSpider.scan(target)
         self.zap.ajaxSpider.set_option_enable_extensions(True)
@@ -172,22 +175,26 @@ class ZapAdapter(IScannerAdapter):
                 time.sleep(5)
                 while self.zap.ajaxSpider.status == "running":
                     time.sleep(2)
+
         # Client Spider
         # zapv2.clientSpider is for version 4.1+! The only available and latest version is 4.0
-        headers = {
-            'Accept': 'application/json',
-            'X-ZAP-API-Key': api_key,
-        }
-        base = 'http://localhost:8080/JSON'
-        scanId = requests.get(f'{base}/clientSpider/action/scan', params={'url': target}, headers=headers).json()['scan']
-        time.sleep(2)
-        while int(requests.get(f'{base}/clientSpider/view/status', params={'scanId': scanId}, headers=headers).json()['status']) < 100:
-            time.sleep(2)
-        if additional_context is not None and len(additional_context) > 0:
-            for context in additional_context:
-                access_scanId = requests.get(f'{self.zap.base}/clientSpider/action/scan', params={'url': context}, headers=headers).json()['scan']
-                while int(requests.get(f'{self.zap.base}/clientSpider/view/status', params={'scanId': access_scanId}, headers=headers).json()['status']) < 100:
-                    time.sleep(2)
+        # try:
+        #     headers = {
+        #         'Accept': 'application/json',
+        #         'X-ZAP-API-Key': api_key,
+        #     }
+        #     base = 'http://localhost:8080/JSON'
+        #     scanId = requests.get(f'{base}/clientSpider/action/scan', params={'url': target, 'pageLoadTime': "30"}, headers=headers).json()['scan']
+        #     time.sleep(2)
+        #     while int(requests.get(f'{base}/clientSpider/view/status', params={'scanId': scanId}, headers=headers).json()['status']) < 100:
+        #         time.sleep(2)
+        #     if additional_context is not None and len(additional_context) > 0:
+        #         for context in additional_context:
+        #             access_scanId = requests.get(f'{self.zap.base}/clientSpider/action/scan', params={'url': context}, headers=headers).json()['scan']
+        #             while int(requests.get(f'{self.zap.base}/clientSpider/view/status', params={'scanId': access_scanId}, headers=headers).json()['status']) < 100:
+        #                 time.sleep(2)
+        # except Exception as e:
+        #     print(f"Client Spider could not crawl the site!\n{e}")
         return True
 
     def _start_passive_scan(self, target: str, report_path: str):
