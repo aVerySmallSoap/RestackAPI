@@ -131,7 +131,7 @@ class Database:
                 scan_type="full scan",
                 scanner="all",
                 path=file_path,
-                total_vulnerabilities=len(analytics_data["union"]),
+                total_vulnerabilities=len(analytics_data["union"][0])+len(analytics_data["union"][1]),
                 critical_count=utils.critical_counter(analytics_data["union"], analytics_data["rules"]),
             )
             _tables.append(report)
