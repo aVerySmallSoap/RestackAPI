@@ -102,7 +102,7 @@ class WapitiAdapter(IScannerAdapter):
             for key, value in report["classifications"][category].items():
                 match key:
                     case "desc":
-                        rule.update({"fullDescription": value})
+                        rule.update({"fullDescription": {"text": value}})
                     case "sol":
                         rule.update({"help": {"text": value}})
                     case "ref":

@@ -208,6 +208,7 @@ class Database:
                 scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="wapiti",
                 vulnerability_type=_rule["shortDescription"]["text"],
+                description=_rule["fullDescription"]["text"],
                 severity= _severity,
                 http_request=vulnerability["properties"]["http_request"],
                 endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
