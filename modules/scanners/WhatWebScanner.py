@@ -64,6 +64,16 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                               auto_remove=True,
                               name="whatweb")
 
+    async def start_automatic_scan(self, url: str, session_name: str):
+        """Launches a docker container that utilizes the volume flag to store a whatweb report."""
+        client = docker.from_env()
+        client.containers.run("iamyourdev/whatweb",
+                              ["./whatweb", "-a 1", "--verbose", "--log-json", f"./reports/{session_name}.json", url],
+                              volumes={
+                                  DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
+                              auto_remove=True,
+                              detach=True)
+
     def _parse_meta_generator(self, meta_data: dict, technologies: list):
         for item in meta_data:
             _string = ""

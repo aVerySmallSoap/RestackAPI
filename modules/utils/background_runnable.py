@@ -34,14 +34,14 @@ async def _start_automatic_scan(scanner_engine: ScannerEngine, url, database: Da
     _URL = check_url_local_test(str(url))  # Check if the app is hosted locally
 
     # Zap scan
-    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
+    _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.AUTOMATIC, "apikey": "test", "port":7780})
     _zap_result = _zap_scanner.parse_results(_zap_path)
     # Wapiti scan
-    _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
+    _wapiti_scanner.start_automatic_scan(_URL, config)
     _wapiti_result = _wapiti_scanner.parse_results(_wapiti_path)
 
     # WhatWeb scan
-    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
+    await _whatweb_scanner.start_automatic_scan(_URL, session_name)
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
 
     # SearchVulns Query

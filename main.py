@@ -76,7 +76,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
     # scanning
     _URL = check_url_local_test(str(request.url))
-    _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
+    _wapiti_scanner.start_scan(_URL, ScanType.BASIC, config)
     _report = _wapiti_scanner.parse_results(_wapiti_path)
     # WhatWeb scan
     await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
@@ -224,7 +224,7 @@ async def scan(request: ScanRequest) -> dict:
     _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
     _zap_result = _zap_scanner.parse_results(_zap_path)
     # Wapiti scan
-    _wapiti_scanner.start_scan(_URL, ScanType.QUICK, config)
+    _wapiti_scanner.start_scan(_URL, ScanType.BASIC, config)
     _wapiti_result = _wapiti_scanner.parse_results(_wapiti_path)
 
     # WhatWeb scan

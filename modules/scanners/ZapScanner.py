@@ -7,6 +7,9 @@ from modules.interfaces.IScannerAdapter import IScannerAdapter
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from zapv2 import ZAPv2
 
+from modules.utils.docker_utils import start_automatic_zap_service
+
+
 class ZapAdapter(IScannerAdapter):
     zap: ZAPv2
 
@@ -14,11 +17,13 @@ class ZapAdapter(IScannerAdapter):
         self.zap = ZAPv2(apikey=config["apikey"], proxies={"http": "127.0.0.1:8080"})
 
     def start_scan(self, url:str, config: dict):
-        self._context_lookup(url, config["apikey"])
+        self._context_lookup(url, api_key=config["apikey"])
         if config["scan_type"] == ZAPScanTypes.PASSIVE:
             self._start_passive_scan(url, config["path"])
         elif config["scan_type"] == ZAPScanTypes.ACTIVE:
             self._start_active_scan(url, config["path"])
+        elif config["scan_type"] == ZAPScanTypes.AUTOMATIC:
+            self._start_automatic_scan(url, config)
 
     def stop_scan(self, scan_id: str | int) -> int:
         """TBD"""
@@ -208,5 +213,20 @@ class ZapAdapter(IScannerAdapter):
         while int(self.zap.ascan.status(scanID)) < 100: # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
             time.sleep(2)
         with open(report_path, "w") as file:
+            file.write(json.dumps(self.zap.core.alerts(baseurl=target)))
+            file.flush()
+
+    def _start_automatic_scan(self, target, config: dict):
+        start_automatic_zap_service(config)
+        auto_zap = ZAPv2(apikey=config["apikey"], proxies={"http": f"http://127.0.0.1:{config['port']}"})
+        auto_zap.ascan.set_option_attack_policy('Pen Test')
+        auto_zap.ascan.set_option_default_policy('Pen Test')
+        auto_zap.ascan.set_policy_alert_threshold(2, 'MEDIUM', 'Server Security')
+        auto_zap.ascan.set_policy_attack_strength(2, 'MEDIUM', 'Server Security')
+        scanID = auto_zap.ascan.scan(target, recurse=True)
+        while int(auto_zap.ascan.status(
+                scanID)) < 100:  # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
+            time.sleep(2)
+        with open(config["path"], "w") as file:
             file.write(json.dumps(self.zap.core.alerts(baseurl=target)))
             file.flush()

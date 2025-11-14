@@ -2,6 +2,7 @@ import json
 import time
 
 import docker
+from docker.models.containers import Container
 from zapv2 import ZAPv2
 
 from modules.utils.load_configs import DEV_ENV
@@ -44,9 +45,16 @@ def update_zap_service():
             except Exception as e:
                 print(f"We waited for 30 seconds but got: \n {e}")
 
-def start_automatic_zap_service(config: dict):
-    """TBD"""
-    pass
+def start_automatic_zap_service(config: dict) -> Container:
+    client = docker.from_env()
+    return client.containers.run(
+        "zaproxy/zap-stable",
+        ["zap.sh", "-daemon", "-Xmx4g", "-host", "0.0.0.0", "-config",
+         "api.addrs.addr.name=.*", "-config","api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}"],
+        volumes={f"{_zap_path}": {"bind": "/home/zap", "mode": "rw"}},  # TODO: Change path to ENV
+        ports={"8080/tcp": config["port"]},
+        detach=True
+    )
 
 def start_whatweb_service(config: dict | None):
     """TBD"""
@@ -95,6 +103,7 @@ def vuln_search_query(technology: str|list[dict], session_name: str) -> bool:
                 name="search_vulns",
                 volumes={f"{_searchVulns_path}": {"bind": "/home/search_vulns/reports", "mode":"rw"}},
                 command=_commands,
+                detach=True
             )
         return True
     except Exception as e:
