@@ -1,3 +1,4 @@
+apscheduler
 wapiti3
 fastapi[standard]
 tz
@@ -11,3 +12,4 @@ ijson
 zaproxy
 docker
 google-genai
+aiofiles

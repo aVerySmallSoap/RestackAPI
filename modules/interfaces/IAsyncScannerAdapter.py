@@ -11,7 +11,7 @@ class IAsyncScannerAdapter(ABC):
         pass
 
     @abstractmethod
-    def generate_config(self, user_config: dict) -> dict:
+    async def generate_config(self, user_config: dict) -> dict:
         """Generates a config from a user request"""
         pass
 

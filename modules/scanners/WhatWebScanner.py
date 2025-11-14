@@ -17,7 +17,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         """TBD"""
         pass
 
-    def generate_config(self, user_config: dict) -> dict:
+    async def generate_config(self, user_config: dict) -> dict:
         """TBD"""
         pass
 

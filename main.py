@@ -1,6 +1,8 @@
+import json
 import time
 from datetime import datetime
 
+import aiofiles
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, AnyUrl
@@ -10,7 +12,7 @@ from modules.interfaces.enums.ScanTypes import ScanType
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
-from modules.scanners.WhatWebAdapter import WhatWebAdapter
+from modules.scanners.WhatWebScanner import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
@@ -207,7 +209,7 @@ async def scan(request: ScanRequest) -> dict:
     config = _wapiti_scanner.generate_config({"path": _wapiti_path, "modules": ["all"]})
     # scanning
     _URL = check_url_local_test(str(request.url))  # Check if the app is hosted locally
-    # url_context = zap.pscan.urls(url) # extract zap crawl and seed wapiti
+
     # Zap scan
     _zap_scanner.start_scan(_URL, {"path": _zap_path, "scan_type": ZAPScanTypes.ACTIVE, "apikey": "test"})
     _zap_result = _zap_scanner.parse_results(_zap_path)
@@ -218,6 +220,7 @@ async def scan(request: ScanRequest) -> dict:
     # WhatWeb scan
     await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
+
     # SearchVulns Query
     _query_results = {}
     if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
@@ -233,6 +236,13 @@ async def scan(request: ScanRequest) -> dict:
     _results = analyze_results(session_name, _wapiti_result, _zap_result)
     time_end = time.perf_counter()
     scan_time = time_end - time_start
+
+    # Save report in disk
+    f = await aiofiles.open(f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json", "r")
+    await f.write(json.dumps(
+        {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
+         "scan_time": scan_time}, indent=4))
+    await f.close()
     # DB write
     _db.insert_scan_report(_scan_start, f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json",
                            _whatweb_results["data"], _zap_result, _wapiti_result, _results, scan_time, _URL)

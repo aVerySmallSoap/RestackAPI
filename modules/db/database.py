@@ -1,6 +1,7 @@
 import datetime
 import json
 from math import floor
+from warnings import deprecated
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -15,13 +16,13 @@ from modules.db.table_collection import Report, TechDiscovery, Scan, Vulnerabili
 class Database:
 
     _engine = None
-    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack"
+    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack" #TODO: Change to ENV when deploying
 
     def __int__(self):
         pass
 
     def _check_engine(self):
-        """Check if the database exists, if not, create it"""
+        """Check if the database exists, if not, create it then load it, else, load it"""
         if not database_exists(self._url):
             create_database(self._url)
             self._engine = create_engine(self._url)
@@ -227,6 +228,7 @@ class Database:
             self._engine = self._check_engine()
         return self._engine
 
+    @deprecated("Should utilize Laravel's ORM")
     def get_report_by_id(self, report_id: str):
         engine = self._check_engine()
         with Session(engine) as session:

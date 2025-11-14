@@ -8,7 +8,6 @@ from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from zapv2 import ZAPv2
 
 class ZapAdapter(IScannerAdapter):
-    #TODO: Improve scanning capabilities
     zap: ZAPv2
 
     def __init__(self, config: dict):
@@ -105,11 +104,6 @@ class ZapAdapter(IScannerAdapter):
                     case _:
                         _result["level"] = "none"
                 _sarif["runs"][0]["results"].append(_result)
-            # Test
-            return _sarif
-            # with open("zap_report.sarif", "w") as out:
-            #     json.dump(_sarif, out, indent=2)
-            # end test
             return _sarif
 
     def _fetch_alert_har(self, path:str) -> dict:
@@ -211,8 +205,7 @@ class ZapAdapter(IScannerAdapter):
         self.zap.ascan.set_policy_alert_threshold(2, 'MEDIUM', 'Server Security')
         self.zap.ascan.set_policy_attack_strength(2, 'MEDIUM', 'Server Security')
         scanID = self.zap.ascan.scan(target, recurse=True)
-        print(f"target: {target}")
-        while int(self.zap.ascan.status(scanID)) < 100:
+        while int(self.zap.ascan.status(scanID)) < 100: # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
             time.sleep(2)
         with open(report_path, "w") as file:
             file.write(json.dumps(self.zap.core.alerts(baseurl=target)))
