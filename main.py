@@ -1,5 +1,6 @@
 import json
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 import aiofiles
@@ -23,6 +24,7 @@ from modules.analytics.vulnerability_analysis import analyze_results
 
 # == TESTING MODULES ==
 from modules.utils.DEV_utils import check_url_local_test
+from services.managers.ScheduleManager import ScheduleManager
 
 # == END OF TESTING MODULES==
 
@@ -36,20 +38,28 @@ _db = Database()
 start_manual_zap_service({"apikey": "test"})
 update_zap_service()
 _scannerEngine = ScannerEngine()
+_scheduleManager = ScheduleManager(_db)
 check_directories()
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = _scheduleManager.initialize_apscheduler_jobs(_scannerEngine, _db)
+    scheduler.start()
+    yield
+    if scheduler.running:
+        scheduler.shutdown()
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
 )
 
-
 class ScanRequest(BaseModel):
     url: AnyUrl
     config: dict | None = None
-
 
 @app.post("/api/v1/wapiti/scan/quick")
 async def wapiti_scan(request: ScanRequest) -> dict:

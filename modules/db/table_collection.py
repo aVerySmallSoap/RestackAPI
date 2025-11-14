@@ -61,3 +61,11 @@ class Vulnerability(Base):
     method: Mapped[str]
     state: Mapped[str]
     data: Mapped[JSON] = mapped_column(JSON())
+
+class ScheduledScans(Base):
+    __tablename__ = "scheduled_scans"
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String())
+    codename: Mapped[str] = mapped_column(String(), unique=True)
+    configuration: Mapped[JSON] = mapped_column(JSON())
