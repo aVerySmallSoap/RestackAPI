@@ -11,5 +11,7 @@ requests
 ijson
 zaproxy
 docker
+pandas
+openpyxl
 google-genai
 aiofiles

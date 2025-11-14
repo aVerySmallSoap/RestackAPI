@@ -44,8 +44,12 @@ check_directories()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print("Starting Scheduling")
     scheduler = _scheduleManager.initialize_apscheduler_jobs(_scannerEngine, _db)
     scheduler.start()
+    app.state.scheduler = scheduler
+    for schedule in scheduler.get_jobs():
+        print(f"Name: {schedule.name}\ntrigger: {schedule.trigger}\n next run in: {schedule.next_run_time}\n")
     yield
     if scheduler.running:
         scheduler.shutdown()
@@ -83,7 +87,9 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     # SearchVulns Query
     _query_results = {}
-    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+    if _whatweb_results.__contains__("error"):
+        _query_results = None
+    elif len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
         has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
         if has_results:
             _query_results = parse_query(session_name)
@@ -95,11 +101,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     scan_time = time_end - time_start
     _db.insert_wapiti_quick_report(_scan_start, _wapiti_path, _whatweb_results["raw"], _report,
                                    scan_time)  # Rewrite reading of report variable
-    if not _whatweb_results.__contains__("error"):
-        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
-                "scan_time": scan_time}
-    else:
-        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+
+    return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
                 "scan_time": scan_time}
 
 
@@ -133,7 +136,9 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     # SearchVulns Query
     _query_results = {}
-    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+    if _whatweb_results.__contains__("error"):
+        _query_results = None
+    elif len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
         has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
         if has_results:
             _query_results = parse_query(session_name)
@@ -145,11 +150,7 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     time_end = time.perf_counter()
     scan_time = time_end - time_start
     _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results["data"], _report, scan_time, _URL)
-    if not _whatweb_results.__contains__("error"):
-        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
-                "scan_time": scan_time}
-    else:
-        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+    return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
                 "scan_time": scan_time}
 
 
@@ -176,7 +177,9 @@ async def zap_active_scan(request: ScanRequest) -> dict:
     _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
     # SearchVulns Query
     _query_results = {}
-    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+    if _whatweb_results.__contains__("error"):
+        _query_results = None
+    elif len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
         has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
         if has_results:
             _query_results = parse_query(session_name)
@@ -187,12 +190,8 @@ async def zap_active_scan(request: ScanRequest) -> dict:
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start
-    _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results["data"], _report, scan_time, _URL)
-    if not _whatweb_results.__contains__("error"):
-        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
-                "scan_time": scan_time}
-    else:
-        return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+    _db.insert_zap_report(_scan_start, _zap_path, _whatweb_results, _report, scan_time, _URL)
+    return {"data": _report, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
                 "scan_time": scan_time}
 
 
@@ -233,7 +232,9 @@ async def scan(request: ScanRequest) -> dict:
 
     # SearchVulns Query
     _query_results = {}
-    if len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
+    if _whatweb_results.__contains__("error"):
+        _query_results = None
+    elif len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
         has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
         if has_results:
             _query_results = parse_query(session_name)
@@ -248,19 +249,15 @@ async def scan(request: ScanRequest) -> dict:
     scan_time = time_end - time_start
 
     # Save report in disk
-    f = await aiofiles.open(f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json", "r")
+    f = await aiofiles.open(f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json", "w")
     await f.write(json.dumps(
-        {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
+        {"data": _results, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
          "scan_time": scan_time}, indent=4))
     await f.close()
     # DB write
     _db.insert_scan_report(_scan_start, f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json",
-                           _whatweb_results["data"], _zap_result, _wapiti_result, _results, scan_time, _URL)
-    if not _whatweb_results.__contains__("error"):
-        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results["data"], "patchable": _query_results},
-                "scan_time": scan_time}
-    else:
-        return {"data": _results, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
+                           _whatweb_results, _zap_result, _wapiti_result, _results, scan_time, _URL)
+    return {"data": _results, "plugins": {"fingerprinted": _whatweb_results, "patchable": _query_results},
                 "scan_time": scan_time}
 
 

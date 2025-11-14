@@ -1,0 +1,3 @@
+
+class RetryExceeded(Exception):
+    pass

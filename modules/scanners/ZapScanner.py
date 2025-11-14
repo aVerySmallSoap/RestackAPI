@@ -1,12 +1,12 @@
 import json
 import time
 import urllib.parse
-import requests
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from zapv2 import ZAPv2
 
+from modules.interfaces.types.RetryExceeded import RetryExceeded
 from modules.utils.docker_utils import start_automatic_zap_service
 
 
@@ -17,10 +17,11 @@ class ZapAdapter(IScannerAdapter):
         self.zap = ZAPv2(apikey=config["apikey"], proxies={"http": "127.0.0.1:8080"})
 
     def start_scan(self, url:str, config: dict):
-        self._context_lookup(url, api_key=config["apikey"])
         if config["scan_type"] == ZAPScanTypes.PASSIVE:
+            self._context_lookup(url, api_key=config["apikey"])
             self._start_passive_scan(url, config["path"])
         elif config["scan_type"] == ZAPScanTypes.ACTIVE:
+            self._context_lookup(url, api_key=config["apikey"])
             self._start_active_scan(url, config["path"])
         elif config["scan_type"] == ZAPScanTypes.AUTOMATIC:
             self._start_automatic_scan(url, config)
@@ -119,6 +120,7 @@ class ZapAdapter(IScannerAdapter):
                 message_ids += str(alert['sourceMessageId']) + ','
             message_ids = message_ids.removesuffix(',')
             messages = self.zap.core.messages_by_id(message_ids)
+            _returnable = {}
             if len(messages) > 0 and type(messages) is not str:
                 _har_list = []
                 for message in messages:  # id requestBody requestHeader responseBody responseHeader
@@ -130,7 +132,6 @@ class ZapAdapter(IScannerAdapter):
                         "responseHeader": message["responseHeader"]
                     }
                     _har_list.append(har)
-                _returnable = {}
                 for har in _har_list:
                     if len(_returnable) == 0 or har["id"] not in _returnable:
                         _returnable[har["id"]] = [har]
@@ -140,18 +141,20 @@ class ZapAdapter(IScannerAdapter):
                     test.write(json.dumps(_returnable))
             return _returnable
 
-    def _context_lookup(self, target: str, api_key:str, additional_context: list = None) -> bool:
-        self.zap.core.access_url(url=target, followredirects=True)
+    def _context_lookup(self, target: str, api_key:str, additional_context: list = None, zap_instance: ZAPv2 = None) -> bool:
+        zap = zap_instance if zap_instance is not None else self.zap
+        zap.core.access_url(url=target, followredirects=True)
         if additional_context is not None:
             for context in additional_context:
-                self.zap.core.access_url(url=context, followredirects=True)
+                zap.core.access_url(url=context, followredirects=True)
 
         # Traditional Crawler
-        scanId = self.zap.spider.scan(url=target, recurse=True)
-        self.zap.spider.set_option_parse_robots_txt(True)
-        self.zap.spider.set_option_parse_sitemap_xml(True)
+        scanId = zap.spider.scan(url=target, recurse=True)
+        zap.spider.set_option_parse_robots_txt(True)
+        zap.spider.set_option_parse_sitemap_xml(True)
         time.sleep(5)
-        while int(self.zap.spider.status(scanId)) < 100:
+        while int(zap.spider.status(scanId)) < 100:
+            print(f"Crawling with traditional crawler @ {int(self.zap.spider.status(scanId))}")
             time.sleep(2)
         if additional_context is not None and len(additional_context) > 0:
             for context in additional_context:
@@ -167,6 +170,7 @@ class ZapAdapter(IScannerAdapter):
         self.zap.ajaxSpider.set_option_reload_wait(10)
         time.sleep(5)
         while self.zap.ajaxSpider.status == "running":
+            print(f"Crawling with ajax crawler @ {self.zap.ajaxSpider.status}")
             time.sleep(2)
         if additional_context is not None and len(additional_context) > 0:
             for context in additional_context:
@@ -205,10 +209,6 @@ class ZapAdapter(IScannerAdapter):
             file.flush()
 
     def _start_active_scan(self, target: str, report_path: str):
-        self.zap.ascan.set_option_attack_policy('Pen Test')
-        self.zap.ascan.set_option_default_policy('Pen Test')
-        self.zap.ascan.set_policy_alert_threshold(2, 'MEDIUM', 'Server Security')
-        self.zap.ascan.set_policy_attack_strength(2, 'MEDIUM', 'Server Security')
         scanID = self.zap.ascan.scan(target, recurse=True)
         while int(self.zap.ascan.status(scanID)) < 100: # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
             time.sleep(2)
@@ -217,12 +217,29 @@ class ZapAdapter(IScannerAdapter):
             file.flush()
 
     def _start_automatic_scan(self, target, config: dict):
-        start_automatic_zap_service(config)
-        auto_zap = ZAPv2(apikey=config["apikey"], proxies={"http": f"http://127.0.0.1:{config['port']}"})
-        auto_zap.ascan.set_option_attack_policy('Pen Test')
-        auto_zap.ascan.set_option_default_policy('Pen Test')
-        auto_zap.ascan.set_policy_alert_threshold(2, 'MEDIUM', 'Server Security')
-        auto_zap.ascan.set_policy_attack_strength(2, 'MEDIUM', 'Server Security')
+        container = start_automatic_zap_service(config)
+        auto_zap = ZAPv2(apikey=config["apikey"], proxies={"http": f"127.0.0.1:{config['port']}"})
+        auto_zap.base = f"http://127.0.0.1:{config['port']}/JSON/"
+        _retryExceeded = False
+        _retryCount = 0
+        while True:
+            time.sleep(30)
+            try:
+                request = auto_zap.stats.stats()
+                print(f"Zap API live! Zap version: {request}")
+                if _retryCount > 10:
+                    raise RetryExceeded().add_note("Max retries exceeded")
+                if _retryExceeded:
+                    print("Could not communicate with ZAP API")
+                    break
+                break
+            except Exception as e:
+                if isinstance(e, RetryExceeded):
+                    print(f"Max retries exceeded!")
+                    _retryExceeded = True
+                print(f"Zap API is still not up! We will try again... @ attempt #{_retryCount} \n{e}\n")
+                _retryCount += 1
+        self._context_lookup(target, api_key=config["apikey"], zap_instance=auto_zap)
         scanID = auto_zap.ascan.scan(target, recurse=True)
         while int(auto_zap.ascan.status(
                 scanID)) < 100:  # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
@@ -230,3 +247,5 @@ class ZapAdapter(IScannerAdapter):
         with open(config["path"], "w") as file:
             file.write(json.dumps(self.zap.core.alerts(baseurl=target)))
             file.flush()
+        container.stop()
+        container.remove()
