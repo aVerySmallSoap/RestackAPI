@@ -24,7 +24,7 @@ class ZapAdapter(IScannerAdapter):
             self._context_lookup(url, api_key=config["apikey"])
             self._start_active_scan(url, config["path"])
         elif config["scan_type"] == ZAPScanTypes.AUTOMATIC:
-            self._start_automatic_scan(url, config)
+            self._start_automatic_scan(url, config, config["client_instance"])
 
     def stop_scan(self, scan_id: str | int) -> int:
         """TBD"""
@@ -35,8 +35,10 @@ class ZapAdapter(IScannerAdapter):
         pass
 
     # TODO: No error handling
-    def parse_results(self, path:str) -> dict:
-        _alert_hars = self._fetch_alert_har(path)
+    def parse_results(self, path:str, zap: ZAPv2 = None) -> dict:
+        if zap is None:
+            zap = self.zap
+        _alert_hars = self._fetch_alert_har(path, zap)
         with open(path, "r") as f:
             report = json.load(f)
             _sarif = {
@@ -112,14 +114,14 @@ class ZapAdapter(IScannerAdapter):
                 _sarif["runs"][0]["results"].append(_result)
             return _sarif
 
-    def _fetch_alert_har(self, path:str) -> dict:
+    def _fetch_alert_har(self, path:str, zap: ZAPv2) -> dict:
         with open(path, 'r') as f:
             report = json.load(f)
             message_ids = ""
             for alert in report:
                 message_ids += str(alert['sourceMessageId']) + ','
             message_ids = message_ids.removesuffix(',')
-            messages = self.zap.core.messages_by_id(message_ids)
+            messages = zap.core.messages_by_id(message_ids)
             _returnable = {}
             if len(messages) > 0 and type(messages) is not str:
                 _har_list = []
@@ -216,32 +218,35 @@ class ZapAdapter(IScannerAdapter):
             file.write(json.dumps(self.zap.core.alerts(baseurl=target)))
             file.flush()
 
-    def _start_automatic_scan(self, target, config: dict):
+    def _start_automatic_scan(self, target, config: dict, zap: ZAPv2):
         container = start_automatic_zap_service(config)
-        auto_zap = ZAPv2(apikey=config["apikey"], proxies={"http": f"127.0.0.1:{config['port']}"})
-        auto_zap.base = f"http://127.0.0.1:{config['port']}/JSON/"
+        # auto_zap.base = f"http://127.0.0.1:{config['port']}/JSON/"
         _retryExceeded = False
         _retryCount = 0
         while True:
-            time.sleep(30)
+            time.sleep(25)
             try:
-                request = auto_zap.stats.stats()
-                print(f"Zap API live! Zap version: {request}")
-                if _retryCount > 10:
-                    raise RetryExceeded().add_note("Max retries exceeded")
+                _retryCount += 1
                 if _retryExceeded:
                     print("Could not communicate with ZAP API")
                     break
+                if _retryCount > 10:
+                    print(RetryExceeded())
+                    raise RetryExceeded()
+                request = zap.stats.stats()
+                print(f"Zap API live! Zap version: {request}")
                 break
             except Exception as e:
+                print(type(e))
                 if isinstance(e, RetryExceeded):
                     print(f"Max retries exceeded!")
                     _retryExceeded = True
                 print(f"Zap API is still not up! We will try again... @ attempt #{_retryCount} \n{e}\n")
-                _retryCount += 1
-        self._context_lookup(target, api_key=config["apikey"], zap_instance=auto_zap)
-        scanID = auto_zap.ascan.scan(target, recurse=True)
-        while int(auto_zap.ascan.status(
+
+                print(_retryCount)
+        self._context_lookup(target, api_key=config["apikey"], zap_instance=zap)
+        scanID = zap.ascan.scan(target, recurse=True)
+        while int(zap.ascan.status(
                 scanID)) < 100:  # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
             time.sleep(2)
         with open(config["path"], "w") as file:

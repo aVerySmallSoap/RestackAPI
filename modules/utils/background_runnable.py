@@ -6,7 +6,6 @@ from datetime import datetime
 import aiofiles
 from modules.analytics.vulnerability_analysis import analyze_results
 from modules.db.database import Database
-from modules.interfaces.enums.ScanTypes import ScanType
 from modules.interfaces.enums.ScannerTypes import ScannerTypes
 from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
 from modules.scanners.WapitiScanner import WapitiAdapter
@@ -16,6 +15,8 @@ from modules.utils.DEV_utils import check_url_local_test
 from modules.utils.docker_utils import vuln_search_query, parse_query
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
+
+from zapv2 import ZAPv2
 
 async def _start_automatic_scan(scanner_engine: ScannerEngine, url, database: Database):
     print("Starting automatic scan")
@@ -78,8 +79,12 @@ def _run_blocking_scans_and_analysis(url, session_name, zap_path, wapiti_path, w
     _URL = check_url_local_test(str(url))
 
     # Zap scan
-    _zap_scanner.start_scan(_URL, {"path": zap_path, "scan_type": ZAPScanTypes.AUTOMATIC, "apikey": "test", "port":9100, "session_name": session_name})
-    _zap_result = _zap_scanner.parse_results(zap_path)
+    api_key = 'test'
+    port=9100
+    auto_zap = ZAPv2(apikey=api_key,
+                     proxies={"http": f"127.0.0.1:{port}", "https": f"127.0.0.1:{port}"})
+    _zap_scanner.start_scan(_URL, {"path": zap_path, "scan_type": ZAPScanTypes.AUTOMATIC, "apikey": api_key, "port": port,"session_name": session_name, "client_instance": auto_zap})
+    _zap_result = _zap_scanner.parse_results(zap_path, auto_zap)
 
     # Wapiti scan
     _wapiti_scanner.start_automatic_scan(_URL, config)
