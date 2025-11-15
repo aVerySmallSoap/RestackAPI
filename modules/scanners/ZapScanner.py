@@ -3,7 +3,7 @@ import time
 import urllib.parse
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
-from modules.interfaces.enums.ZAPScanTypes import ZAPScanTypes
+from modules.interfaces.enums.restack_enums import ZAPScanType
 from zapv2 import ZAPv2
 
 from modules.interfaces.types.RetryExceeded import RetryExceeded
@@ -17,13 +17,13 @@ class ZapAdapter(IScannerAdapter):
         self.zap = ZAPv2(apikey=config["apikey"], proxies={"http": "127.0.0.1:8080"})
 
     def start_scan(self, url:str, config: dict):
-        if config["scan_type"] == ZAPScanTypes.PASSIVE:
+        if config["scan_type"] == ZAPScanType.PASSIVE:
             self._context_lookup(url, api_key=config["apikey"])
             self._start_passive_scan(url, config["path"])
-        elif config["scan_type"] == ZAPScanTypes.ACTIVE:
+        elif config["scan_type"] == ZAPScanType.ACTIVE:
             self._context_lookup(url, api_key=config["apikey"])
             self._start_active_scan(url, config["path"])
-        elif config["scan_type"] == ZAPScanTypes.AUTOMATIC:
+        elif config["scan_type"] == ZAPScanType.AUTOMATIC:
             self._start_automatic_scan(url, config, config["client_instance"])
 
     def stop_scan(self, scan_id: str | int) -> int:
@@ -114,7 +114,8 @@ class ZapAdapter(IScannerAdapter):
                 _sarif["runs"][0]["results"].append(_result)
             return _sarif
 
-    def _fetch_alert_har(self, path:str, zap: ZAPv2) -> dict:
+    @staticmethod
+    def _fetch_alert_har(path:str, zap: ZAPv2) -> dict:
         with open(path, 'r') as f:
             report = json.load(f)
             message_ids = ""

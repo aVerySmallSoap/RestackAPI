@@ -87,7 +87,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                 _tech.append({plugin: content})
         return {"data": [_versioned_tech, _tech, _cookies, _extra]}
 
-    async def _launch_mounted_container(self, url: str, session_name: str):
+    @staticmethod
+    async def _launch_mounted_container(url: str, session_name: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
@@ -97,7 +98,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                               auto_remove=True,
                               name="whatweb")
 
-    async def start_automatic_scan(self, url: str, session_name: str):
+    @staticmethod
+    async def start_automatic_scan(url: str, session_name: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
@@ -106,7 +108,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True)
 
-    def _parse_meta_generator(self, meta_data: dict, technologies: list):
+    @staticmethod
+    def _parse_meta_generator(meta_data: dict, technologies: list):
         for item in meta_data:
             _string = ""
             _version = ""
@@ -119,7 +122,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                     _string += item[index]
             technologies.append({_string.rstrip(): [_version]})
 
-    def _check_files(self):
+    @staticmethod
+    def _check_files():
         """Checks to see if a file exists, if not, creates a new file; else, remove the files contents"""
         if not os.path.isdir(DEV_ENV["report_paths"]["whatweb"]):
             os.makedirs(DEV_ENV["report_paths"]["whatweb"])

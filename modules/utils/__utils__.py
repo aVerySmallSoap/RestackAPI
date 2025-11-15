@@ -1,3 +1,5 @@
+import os
+
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
     """
@@ -13,7 +15,8 @@ def unroll_sarif_rules(sarif_report: dict) -> dict:
         _returnable[rule["id"]] = _lookup_values
     return _returnable
 
-def critical_counter(sarif_report: dict, rules: dict|list = None) -> int:
+
+def critical_counter(sarif_report: dict, rules: dict | list = None) -> int:
     """
     Counts the number of critical vulnerabilities
     """
@@ -52,3 +55,19 @@ def critical_counter(sarif_report: dict, rules: dict|list = None) -> int:
                             _rule["properties"]["risk"]) == "critical":
                         count += 1
         return count
+
+
+def check_directories():
+    """This functions should check the existence of several required directories.
+    These directories are reports and temp"""
+    if not os.path.exists("./reports"):
+        os.mkdir("./reports")
+    if not os.path.exists("./temp"):
+        os.mkdir("./temp")
+
+
+def check_url_local_test(url: str) -> str:
+    """Check if a url contains localhost or 127.0.0.1 and returns the docker equivalent"""
+    if url.__contains__("localhost") or url.__contains__("127.0.0.1"):
+        return url.replace("localhost", "host.docker.internal")
+    return url

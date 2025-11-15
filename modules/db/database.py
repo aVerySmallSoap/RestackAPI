@@ -117,7 +117,7 @@ class Database:
             self._insert_zap_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
 
-    def insert_scan_report(self, timestamp: datetime, file_path: str, plugins:list, \
+    def insert_scan_report(self, timestamp: datetime, file_path: str, plugins:list,
                            zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):
         engine = self._check_engine()
         _tables = []

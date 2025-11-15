@@ -1,7 +1,7 @@
 import queue
 import datetime
 
-from modules.interfaces.enums.ScannerTypes import ScannerTypes
+from modules.interfaces.enums.restack_enums import ScannerType
 from modules.utils.load_configs import DEV_ENV
 
 
@@ -24,7 +24,7 @@ class ScannerEngine(metaclass=Singleton):
     _zap_path = DEV_ENV["report_paths"]["zap"]
     _full_scan_path = DEV_ENV["report_paths"]["full_scan"]
 
-    def enqueue_session(self, scanner_type: ScannerTypes, start_time: datetime):
+    def enqueue_session(self, scanner_type: ScannerType, start_time: datetime):
         self.enqueue_name(start_time)
         self._ScanQueue.put({"scanner": scanner_type, "date": start_time})
 
@@ -37,7 +37,7 @@ class ScannerEngine(metaclass=Singleton):
     def dequeue_name(self) -> str:
         return self._NameQueue.get()
 
-    def generate_file(self, scanner_type: ScannerTypes, path: str = None) -> str:
+    def generate_file(self, scanner_type: ScannerType, path: str = None) -> str:
         """Generates the session name for the reports. The ``path`` parameter is used to override the default path check.
         :param scanner_type: Type of scanner
         :param path: Optional path to save the reports
@@ -46,13 +46,13 @@ class ScannerEngine(metaclass=Singleton):
         if path is not None:
             return path
         match scanner_type:
-            case ScannerTypes.WAPITI:
+            case ScannerType.WAPITI:
                 return f"{self._wapiti_path}\\{self.dequeue_name()}.json"
-            case ScannerTypes.WHATWEB:
+            case ScannerType.WHATWEB:
                 return f"{self._whatweb_path}\\{self.dequeue_name()}.json"
-            case ScannerTypes.ZAP:
+            case ScannerType.ZAP:
                 return f"{self._zap_path}\\{self.dequeue_name()}.json"
-            case ScannerTypes.FULL:
+            case ScannerType.FULL:
                 return f"{self._full_scan_path}\\{self.dequeue_name()}.json"
             case _:
                 return ""

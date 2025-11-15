@@ -29,7 +29,15 @@ class ScheduleManager:
                 return []
             for row in rows:
                 # If interval is datatime then parse it out, else, just use it
-                _returnable.append({"id": row.id, "cron_exp": row.configuration["interval"], "config": row.configuration["scan_config"], "url": row.url, "name": row.codename})
+                _returnable.append(
+                    {
+                    "id": row.id,
+                    "cron_exp": row.configuration["interval"],
+                    "config": row.configuration["scan_config"],
+                    "url": row.url,
+                    "name": row.codename
+                    }
+                )
             return _returnable
 
 

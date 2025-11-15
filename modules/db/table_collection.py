@@ -1,8 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-import sqlalchemy.types
-from sqlalchemy import String, ForeignKey, Column, JSON
+from sqlalchemy import String, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, relationship
 from sqlalchemy.testing.schema import mapped_column
 
@@ -68,4 +67,5 @@ class ScheduledScans(Base):
     id: Mapped[str] = mapped_column(primary_key=True)
     url: Mapped[str] = mapped_column(String())
     codename: Mapped[str] = mapped_column(String(), unique=True)
+    job_type: Mapped[str] = mapped_column(String())
     configuration: Mapped[JSON] = mapped_column(JSON())

@@ -1,9 +1,8 @@
 import json
 import subprocess
-from warnings import deprecated
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
-from modules.interfaces.enums.ScanTypes import ScanType
+from modules.interfaces.enums.restack_enums import ScanType
 from modules.utils.load_configs import DEV_ENV
 from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 
