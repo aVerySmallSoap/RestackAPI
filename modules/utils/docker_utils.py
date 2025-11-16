@@ -1,4 +1,5 @@
 import json
+import os
 import time
 
 import docker
@@ -47,11 +48,13 @@ def update_zap_service():
 
 def start_automatic_zap_service(config: dict) -> Container:
     client = docker.from_env()
+    if not os.path.exists(f"{_zap_path}\\{config['session_name']}"):
+        os.mkdir(f"{_zap_path}\\{config['session_name']}")
     return client.containers.run(
         "zaproxy/zap-stable",
         ["zap.sh", "-daemon", "-Xmx8g", "-host", "0.0.0.0", "-port", f"{config['port']}","-dir", f"/tmp/{config['session_name']}", "-config",
          "api.addrs.addr.name=.*", "-config","api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}"],
-        volumes={f"{_zap_path}": {"bind": f"/temp/{config['session_name']}", "mode": "rw"}},  # TODO: Change path to ENV
+        volumes={f"{_zap_path}\\{config['session_name']}": {"bind": f"/tmp/{config['session_name']}", "mode": "rw"}},  # TODO: Change path to ENV
         ports={f"{config['port']}/tcp": config["port"]},
         detach=True
     )

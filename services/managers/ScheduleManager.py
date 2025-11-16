@@ -5,6 +5,7 @@
 # Related tables: table_collection.ScheduledScans
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 
 from modules.db.database import Database
@@ -32,8 +33,8 @@ class ScheduleManager:
                 _returnable.append(
                     {
                     "id": row.id,
-                    "cron_exp": row.configuration["interval"],
-                    "config": row.configuration["scan_config"],
+                    "type": row.job_type,
+                    "config": row.configuration,
                     "url": row.url,
                     "name": row.codename
                     }
@@ -47,7 +48,15 @@ class ScheduleManager:
             return self._scheduler
         for schedule in _schedules:
             job_id = schedule["id"]
-            new_trigger = CronTrigger(**schedule["cron_exp"])
+
+            # Check if the job type is an interval or cron
+            if schedule["type"] == "interval":
+                new_trigger = IntervalTrigger(**schedule["config"])
+            elif schedule["type"] == "cron":
+                new_trigger = CronTrigger(**schedule["config"])
+            else:
+                new_trigger = None
+
             existing_job = self._scheduler.get_job(job_id)
             if existing_job is None:
                 self._scheduler.add_job(

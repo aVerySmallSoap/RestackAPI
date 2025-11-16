@@ -157,29 +157,29 @@ class ZapAdapter(IScannerAdapter):
         zap.spider.set_option_parse_sitemap_xml(True)
         time.sleep(5)
         while int(zap.spider.status(scanId)) < 100:
-            print(f"Crawling with traditional crawler @ {int(self.zap.spider.status(scanId))}")
+            print(f"Crawling with traditional crawler @ {int(zap.spider.status(scanId))}")
             time.sleep(2)
         if additional_context is not None and len(additional_context) > 0:
             for context in additional_context:
-                access_scanId = self.zap.spider.scan(url=context, recurse=True)
+                access_scanId = zap.spider.scan(url=context, recurse=True)
                 time.sleep(5)
-                while int(self.zap.spider.status(access_scanId)) < 100:
+                while int(zap.spider.status(access_scanId)) < 100:
                     time.sleep(2)
 
         # Ajax Crawler
-        self.zap.ajaxSpider.scan(target)
-        self.zap.ajaxSpider.set_option_enable_extensions(True)
-        self.zap.ajaxSpider.set_option_max_crawl_depth(0)
-        self.zap.ajaxSpider.set_option_reload_wait(10)
+        zap.ajaxSpider.scan(target)
+        zap.ajaxSpider.set_option_enable_extensions(True)
+        zap.ajaxSpider.set_option_max_crawl_depth(0)
+        zap.ajaxSpider.set_option_reload_wait(10)
         time.sleep(5)
-        while self.zap.ajaxSpider.status == "running":
-            print(f"Crawling with ajax crawler @ {self.zap.ajaxSpider.status}")
+        while zap.ajaxSpider.status == "running":
+            print(f"Crawling with ajax crawler @ {zap.ajaxSpider.status}")
             time.sleep(2)
         if additional_context is not None and len(additional_context) > 0:
             for context in additional_context:
-                self.zap.ajaxSpider.scan(url=context)
+                zap.ajaxSpider.scan(url=context)
                 time.sleep(5)
-                while self.zap.ajaxSpider.status == "running":
+                while zap.ajaxSpider.status == "running":
                     time.sleep(2)
 
         # Client Spider
@@ -220,18 +220,16 @@ class ZapAdapter(IScannerAdapter):
             file.flush()
 
     def _start_automatic_scan(self, target, config: dict, zap: ZAPv2):
-        container = start_automatic_zap_service(config)
-        # auto_zap.base = f"http://127.0.0.1:{config['port']}/JSON/"
-        _retryExceeded = False
-        _retryCount = 0
+        _retries_exceeded = False
+        _retry_count = 0
         while True:
             time.sleep(25)
             try:
-                _retryCount += 1
-                if _retryExceeded:
+                _retry_count += 1
+                if _retries_exceeded:
                     print("Could not communicate with ZAP API")
                     break
-                if _retryCount > 10:
+                if _retry_count > 10:
                     print(RetryExceeded())
                     raise RetryExceeded()
                 request = zap.stats.stats()
@@ -240,18 +238,17 @@ class ZapAdapter(IScannerAdapter):
             except Exception as e:
                 print(type(e))
                 if isinstance(e, RetryExceeded):
-                    print(f"Max retries exceeded!")
-                    _retryExceeded = True
-                print(f"Zap API is still not up! We will try again... @ attempt #{_retryCount} \n{e}\n")
+                    print("Max retries exceeded!")
+                    _retries_exceeded = True
+                print(f"Zap API is still not up! We will try again... @ attempt #{_retry_count} \n{e}\n")
 
-                print(_retryCount)
+                print(_retry_count)
         self._context_lookup(target, api_key=config["apikey"], zap_instance=zap)
-        scanID = zap.ascan.scan(target, recurse=True)
+        scan_id = zap.ascan.scan(target, recurse=True)
         while int(zap.ascan.status(
-                scanID)) < 100:  # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
+                scan_id)) < 100:  # TODO: This might error when a scanID does not exist. Maybe due to docker missing the commands or ZAP API not running or ZAP not receiving requests correctly
             time.sleep(2)
         with open(config["path"], "w") as file:
-            file.write(json.dumps(self.zap.core.alerts(baseurl=target)))
+            print(f"Number of alerts in the {zap} instance: {len(zap.core.alerts(baseurl=target))}")
+            file.write(json.dumps(zap.core.alerts(baseurl=target)))
             file.flush()
-        container.stop()
-        container.remove()

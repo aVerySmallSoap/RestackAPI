@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os.path
 import time
 from datetime import datetime
 
@@ -11,7 +12,7 @@ from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from modules.utils.__utils__ import check_url_local_test
-from modules.utils.docker_utils import vuln_search_query, parse_query
+from modules.utils.docker_utils import vuln_search_query, parse_query, start_automatic_zap_service
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
 
@@ -106,6 +107,7 @@ def _run_blocking_scans_and_analysis(url, session_name, zap_path, wapiti_path, w
     # Zap scan
     api_key = 'test'
     port=9100
+    container = start_automatic_zap_service({"port": port, "apikey": api_key, "session_name": session_name})
     auto_zap = ZAPv2(
         apikey=api_key,
         proxies={
@@ -141,6 +143,12 @@ def _run_blocking_scans_and_analysis(url, session_name, zap_path, wapiti_path, w
         _query_results = None
 
     _results = analyze_results(session_name, _wapiti_result, _zap_result)
+
+    # Clean-up
+    container.stop()
+    container.remove()
+    if os.path.exists(f"{zap_path}\\{session_name}"):
+        os.rmdir(f"{zap_path}\\{session_name}")
     return _zap_result, _wapiti_result, _query_results, _results
 
 

@@ -140,5 +140,5 @@ class WapitiAdapter(IScannerAdapter):
     def start_automatic_scan(url:str, user_config: dict = None):
         config_builder = WapitiConfigBuilder()
         _config = config_builder.url(url).output_path(user_config["path"]).build()
-        process = subprocess.Popen(_config, creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS)
+        process = subprocess.Popen(_config, creationflags=(subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW))
         process.wait()
