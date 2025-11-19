@@ -16,3 +16,4 @@ openpyxl
 google-genai
 aiofiles
 loguru
+reportlab

@@ -18,7 +18,7 @@ from modules.scanners.WhatWebScanner import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
-from modules.utils.docker_utils import vuln_search_query, parse_query
+from modules.utils.docker_utils import vuln_search_query, parse_query, start_manual_zap_service
 from modules.utils.__utils__ import check_directories, check_url_local_test
 from modules.analytics.vulnerability_analysis import analyze_results
 from services.managers.ScannerManager import ScannerManager
@@ -40,6 +40,7 @@ _scanner_engine = ScannerEngine()
 _schedule_manager = ScheduleManager(_db)
 _scanner_manager = ScannerManager()
 check_directories()
+start_manual_zap_service({"apikey": "test"})
 logger.add("./logs/{time}.log", rotation="10MB", enqueue=True)
 
 
