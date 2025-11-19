@@ -15,10 +15,9 @@ class WapitiArgs(Enum):
 
 class ScannerType(Enum):
     WAPITI = 1
-    WHATWEB = 2
-    ZAP = 3
-    ZAP_AUTOMATION = 4 # Future feature
-    FULL = 5
+    ZAP = 2
+    ZAP_AUTOMATION = 3 # Future feature
+    FULL = 4
 
 class ScanType(Enum):
     BASIC = 1

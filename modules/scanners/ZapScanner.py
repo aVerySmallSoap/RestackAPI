@@ -7,7 +7,6 @@ from modules.interfaces.enums.restack_enums import ZAPScanType
 from zapv2 import ZAPv2
 
 from modules.interfaces.types.RetryExceeded import RetryExceeded
-from modules.utils.docker_utils import start_automatic_zap_service
 
 
 class ZapAdapter(IScannerAdapter):

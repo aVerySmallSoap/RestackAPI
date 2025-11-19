@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
+from loguru import logger
 
 from modules.db.database import Database
 from modules.db.table_collection import ScheduledScans
@@ -22,6 +23,8 @@ class ScheduleManager:
         self._database = database
 
     def _fetch_schedules_from_db(self) -> list:
+        logger.debug("Fetching schedules from the database")
+
         engine = self._database.engine
         _returnable = []
         with Session(engine) as session:
@@ -43,6 +46,7 @@ class ScheduleManager:
 
 
     def initialize_apscheduler_jobs(self, scanner_engine, database) -> AsyncIOScheduler:
+        logger.debug("Initializing scheduled jobs")
         _schedules = self._fetch_schedules_from_db()
         if _schedules is None or len(_schedules) == 0:
             return self._scheduler

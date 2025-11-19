@@ -1,12 +1,15 @@
+import asyncio
 import json
 import time
+import aiofiles
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-import aiofiles
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, AnyUrl
+from loguru import logger
+
 
 from modules.db.database import Database
 from modules.interfaces.enums.restack_enums import ScanType, ZAPScanType, ScannerType
@@ -15,10 +18,10 @@ from modules.scanners.WhatWebScanner import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapAdapter
 from modules.utils.load_configs import DEV_ENV
 from services.ScannerEngine import ScannerEngine
-from modules.utils.docker_utils import start_manual_zap_service, vuln_search_query, \
-    parse_query, update_zap_service
+from modules.utils.docker_utils import vuln_search_query, parse_query
 from modules.utils.__utils__ import check_directories, check_url_local_test
 from modules.analytics.vulnerability_analysis import analyze_results
+from services.managers.ScannerManager import ScannerManager
 
 # == TESTING MODULES ==
 from services.managers.ScheduleManager import ScheduleManager
@@ -31,18 +34,18 @@ from services.managers.ScheduleManager import ScheduleManager
 # https://github.com/OWASP-Benchmark/BenchmarkPython
 # == END OF TESTING WEBSITES ==
 
+# Initialize required modules and objects
 _db = Database()
-start_manual_zap_service({"apikey": "test"})
-update_zap_service()
-_scannerEngine = ScannerEngine()
-_scheduleManager = ScheduleManager(_db)
+_scanner_engine = ScannerEngine()
+_schedule_manager = ScheduleManager(_db)
+_scanner_manager = ScannerManager()
 check_directories()
+logger.add("./logs/{time}.log", rotation="10MB", enqueue=True)
 
 
 @asynccontextmanager
 async def lifespan(api: FastAPI):
-    print("Starting Scheduling")
-    scheduler = _scheduleManager.initialize_apscheduler_jobs(_scannerEngine, _db)
+    scheduler = _schedule_manager.initialize_apscheduler_jobs(_scanner_engine, _db)
     scheduler.start()
     api.state.scheduler = scheduler
     for schedule in scheduler.get_jobs():
@@ -73,8 +76,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     _wapiti_scanner = WapitiAdapter()
     _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerType.WAPITI, _scan_start)
-    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _scanner_engine.enqueue_session(ScannerType.WAPITI, _scan_start)
+    session_name = _scanner_engine.dequeue_name()  # Get the latest time session and use it as the file name
     _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
     config = _wapiti_scanner.generate_config(
@@ -153,18 +156,35 @@ async def wapiti_scan_full(request: ScanRequest) -> dict:
 @app.post("/api/v1/zap/scan/passive")
 async def zap_passive_scan(request: ScanRequest) -> dict:
     """Starts a passive zap scan"""
+
+    # NEW CODE
+    time_start = time.perf_counter()
+    session = _scanner_manager.generate_unique_session()
+    _URL = check_url_local_test(str(request.url))
+    await asyncio.to_thread(
+        _scanner_manager.start_scan,
+        _URL,
+        session,
+        scanner_type = ScannerType.ZAP,
+        scan_type = ZAPScanType.PASSIVE
+    )
+
+
+
+
+
+    # DECPRICATED
     time_start = time.perf_counter()
     # init
     _scan_start = datetime.now()
     _zap_scanner = ZapAdapter({"apikey": "test"})
     _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerType.ZAP, _scan_start)
-    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _scanner_engine.enqueue_session(ScannerType.ZAP, _scan_start)
+    session_name = _scanner_engine.dequeue_name()  # Get the latest time session and use it as the file name
     _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
 
     # scanning
-    _URL = check_url_local_test(str(request.url))
     _zap_scanner.start_scan(
         _URL,
         {
@@ -239,8 +259,8 @@ async def zap_active_scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     _zap_scanner = ZapAdapter({"apikey": "test"})
     _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerType.ZAP, _scan_start)
-    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _scanner_engine.enqueue_session(ScannerType.ZAP, _scan_start)
+    session_name = _scanner_engine.dequeue_name()  # Get the latest time session and use it as the file name
     _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
 
@@ -327,8 +347,8 @@ async def scan(request: ScanRequest) -> dict:
     _zap_scanner = ZapAdapter({"apikey": "test"})
     _wapiti_scanner = WapitiAdapter()
     _whatweb_scanner = WhatWebAdapter()
-    _scannerEngine.enqueue_session(ScannerType.FULL, _scan_start)
-    session_name = _scannerEngine.dequeue_name()  # Get the latest time session and use it as the file name
+    _scanner_engine.enqueue_session(ScannerType.FULL, _scan_start)
+    session_name = _scanner_engine.dequeue_name()  # Get the latest time session and use it as the file name
     _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
     _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
     _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"

@@ -1,4 +1,6 @@
 import os
+import socket
+import uuid
 
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
@@ -71,3 +73,14 @@ def check_url_local_test(url: str) -> str:
     if url.__contains__("localhost") or url.__contains__("127.0.0.1"):
         return url.replace("localhost", "host.docker.internal")
     return url
+
+def is_port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("localhost", port))
+            return False
+        except OSError:
+            return True
+
+def generate_random_uuid() -> str:
+    return str(uuid.uuid4())
