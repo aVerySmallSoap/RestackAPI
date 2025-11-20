@@ -1,9 +1,9 @@
 # Future feature
 # TODO: Build out and integrate Nikto as part of user requirements
-from modules.interfaces.IScannerAdapter import IScannerAdapter
+from modules.interfaces.IDeprecatedScannerAdapter import IDeprecatedScannerAdapter
 
 
-class NiktoScanner(IScannerAdapter):
+class NiktoScanner(IDeprecatedScannerAdapter):
     def start_scan(self, config: dict, url: str):
         pass
 

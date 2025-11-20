@@ -1,9 +1,9 @@
 # Future feature
 # TODO: Build out and integrate Nmap as additional information gathered
-from modules.interfaces.IScannerAdapter import IScannerAdapter
+from modules.interfaces.IDeprecatedScannerAdapter import IDeprecatedScannerAdapter
 
 
-class NmapScanner(IScannerAdapter):
+class NmapScanner(IDeprecatedScannerAdapter):
     def start_scan(self, config: dict, url: str):
         pass
 

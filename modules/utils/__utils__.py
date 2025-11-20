@@ -1,7 +1,9 @@
+import asyncio
 import os
 import socket
 import uuid
 
+from services.managers.ScannerManager import ScannerManager
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
     """
@@ -84,3 +86,9 @@ def is_port_in_use(port: int) -> bool:
 
 def generate_random_uuid() -> str:
     return str(uuid.uuid4())
+
+def run_start_scan(instance: ScannerManager, url: str, session: str, **config):
+    """
+    Run the async start_scan from ScannerManager in a coroutine.
+    """
+    return asyncio.run(instance.start_scan(url, session, **config))

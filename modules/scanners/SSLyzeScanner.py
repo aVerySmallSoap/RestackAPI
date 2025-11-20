@@ -1,9 +1,9 @@
 # Future feature
 # TODO: Build out and integrate SSLyze as additional information gathered
-from modules.interfaces.IScannerAdapter import IScannerAdapter
+from modules.interfaces.IDeprecatedScannerAdapter import IDeprecatedScannerAdapter
 
 
-class SSLyzeScanner(IScannerAdapter):
+class SSLyzeScanner(IDeprecatedScannerAdapter):
     def start_scan(self, config: dict, url: str):
         pass
 

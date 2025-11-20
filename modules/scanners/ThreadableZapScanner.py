@@ -1,4 +1,3 @@
-import asyncio
 import json
 import time
 from urllib import parse as url_parser
@@ -7,27 +6,24 @@ import aiofiles
 import requests
 from zapv2 import ZAPv2
 
-from modules.interfaces.IThreadableScannerAdapter import IThreadableScannerAdapter
+from modules.interfaces.IScannerAdapter import IScannerAdapter
 from modules.interfaces.enums.restack_enums import ZAPScanType
 from modules.utils.load_configs import DEV_ENV
 from loguru import logger
 
 
-class ThreadableZapScanner(IThreadableScannerAdapter):
+class ZapScanner(IScannerAdapter):
     _base_zap_path = f"{DEV_ENV['report_paths']['zap']}"
 
+    def __init__(self):
+        pass
+
     @logger.catch
-    async def start_scan(self, config: dict, **kwargs):
-        """
-        Spawns a thread and starts a ZAP scan.
-        """
-        zap:ZAPv2
+    def start_scan(self, config: dict, **kwargs):
+        zap: ZAPv2
         scan_object = kwargs.get('threadable_instance')
-        if scan_object is None:
-            scan_object = ThreadableZapScanner()
-        elif not isinstance(scan_object, ThreadableZapScanner):
-            scan_object = ThreadableZapScanner()
-            # log | Recreate this object into the right object
+        if scan_object is None or not isinstance(scan_object, ZapScanner):
+            scan_object = ZapScanner()
 
         if config.get("zap_instance") is None:
             # Try to recreate zap
@@ -44,29 +40,37 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
         try:
             match config["scan_type"]:
                 case ZAPScanType.PASSIVE:
-                    await asyncio.to_thread(
-                        scan_object.start_passive_scan,
+                    logger.info("Starting a passive scan run...")
+                    scan_object.start_passive_scan(
                         zap,
                         api_key=config.get("api_key"),
                         port=config.get("port"),
-                        session= config.get("session")
+                        session=config.get("session"),
+                        url=config.get("url")
                     )
+                    _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
+                    logger.info("Zap scan completed successfully.")
+                    return _returnable
                 case ZAPScanType.ACTIVE:
-                    await asyncio.to_thread(
-                        scan_object.start_active_scan,
+                    logger.info("Starting an active scan run...")
+                    scan_object.start_active_scan(
                         zap,
                         api_key=config.get("api_key"),
                         port=config.get("port"),
-                        session=config.get("session")
+                        session=config.get("session"),
+                        url=config.get("url")
                     )
+                    _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
+                    logger.info("Zap scan completed successfully.")
+                    return _returnable
                 case _:
                     # log
                     raise TypeError  # There is no valid argumentor match that was passed here
         except TypeError as type_e:
-            #log
+            # log
             print(f"The passed object is not of type {type(ZAPScanType)}\n{type_e}")
         except Exception as e:
-            #log
+            # log
             print(f"Unexpected behavior\n{e}")
 
     @logger.catch
@@ -77,10 +81,11 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
         pass
 
     @logger.catch
-    async def parse_results(self, config: dict) -> dict:
+    def parse_results(self, **config) -> dict:
+        logger.info(f"Parsing results for {config.get('session')}")
         try:
-            _har_alerts = await self._fetch_header_and_request_alerts(config.get("zap_instance"))
-            with aiofiles.open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
+            _har_alerts = self._fetch_header_and_request_alerts(config.get("zap_instance"), session=config.get("session"))
+            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
                 report = json.loads(f)
                 _sarif = {
                     "version": "2.1.0",
@@ -154,6 +159,7 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
                         case _:
                             _result["level"] = "none"
                     _sarif["runs"][0]["results"].append(_result)
+                logger.info("Parsing finished!")
                 return _sarif
         except Exception:
             #log
@@ -161,9 +167,13 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
         return {}
 
     @logger.catch
-    async def start_passive_scan(self, zap: ZAPv2, **config):
-        await self._context_lookup(zap, config)
+    def start_blocking_scan(self, config: dict, **kwargs):
+        pass
 
+    @logger.catch
+    def start_passive_scan(self, zap: ZAPv2, **config):
+        self._context_lookup(zap, config)
+        logger.info(f"Starting a zap scan in the passive mode...")
         try:
             while int(zap.pscan.records_to_scan) > 0:
                 time.sleep(2)
@@ -181,8 +191,8 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
             pass
 
     @logger.catch
-    async def start_active_scan(self, zap: ZAPv2, **config):
-        await self._context_lookup(zap, config)
+    def start_active_scan(self, zap: ZAPv2, **config):
+        self._context_lookup(zap, config)
 
         try:
             scan_id = zap.ascan.scan(config.get("url"), recurse=True)
@@ -199,7 +209,8 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
 
     @staticmethod
     @logger.catch
-    async def _context_lookup(zap: ZAPv2, **config):
+    def _context_lookup(zap: ZAPv2, **config):
+        logger.info("Starting a context lookup of {url}", config.get("url"))
         try:
             # Start of context lookup
             zap.core.access_url(config.get("url"), followredirects=True)
@@ -219,7 +230,7 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
                     time.sleep(5)
 
                 #Additional context (future feature for seeding more URLs)
-            except Exception as e:
+            except Exception:
                 #log
                 pass # Unexpected behavior or HTTPConnection error
 
@@ -236,7 +247,7 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
                 while zap.ajaxSpider.status == "running":
                     print(f"Ajax spider crawling and is currently: {zap.ajaxSpider.status}")
                     time.sleep(5)
-            except Exception as e:
+            except Exception:
                 #log
                 pass # Unexpected behavior or HTTPConnection error
 
@@ -251,18 +262,18 @@ class ThreadableZapScanner(IThreadableScannerAdapter):
                 time.sleep(2)
                 while int(requests.get(f'{base}/clientSpider/view/status', params={'scanId': scan_id}, headers=headers).json()['status']) < 100:
                     time.sleep(2)
-            except Exception as e:
+            except Exception:
                 #log
                 pass # Unexpected behaviour or HTTPConnection error
 
-        except Exception as e:
+        except Exception:
             #log
             pass # unexpected behavior
 
-    @staticmethod
     @logger.catch
-    async def _fetch_header_and_request_alerts(zap: ZAPv2, **config) -> dict:
-        with aiofiles.open(config.get("path"), "r") as f:
+    def _fetch_header_and_request_alerts(self, zap: ZAPv2, **config) -> dict:
+        logger.info("Fetching headers and request alerts...")
+        with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
             report = json.loads(f)
             message_ids:str
             for alert in report:

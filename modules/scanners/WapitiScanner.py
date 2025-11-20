@@ -1,12 +1,12 @@
 import json
 import subprocess
 
-from modules.interfaces.IScannerAdapter import IScannerAdapter
+from modules.interfaces.IDeprecatedScannerAdapter import IDeprecatedScannerAdapter
 from modules.interfaces.enums.restack_enums import ScanType
 from modules.utils.load_configs import DEV_ENV
 from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 
-class WapitiAdapter(IScannerAdapter):
+class WapitiAdapter(IDeprecatedScannerAdapter):
 
     # TODO: check if the scan errored in any way
     def start_scan(self, url:str,  scan_type: ScanType, user_config: dict = None):

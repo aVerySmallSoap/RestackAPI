@@ -2,14 +2,14 @@ import json
 import time
 import urllib.parse
 
-from modules.interfaces.IScannerAdapter import IScannerAdapter
+from modules.interfaces.IDeprecatedScannerAdapter import IDeprecatedScannerAdapter
 from modules.interfaces.enums.restack_enums import ZAPScanType
 from zapv2 import ZAPv2
 
 from modules.interfaces.types.RetryExceeded import RetryExceeded
 
 
-class ZapAdapter(IScannerAdapter):
+class ZapAdapter(IDeprecatedScannerAdapter):
     zap: ZAPv2
 
     def __init__(self, config: dict):

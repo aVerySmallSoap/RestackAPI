@@ -77,7 +77,7 @@ class Database:
             self._insert_wapiti_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
 
-    def insert_zap_report(self, timestamp: datetime, file_path: str, plugins:list, raw_data: dict, duration: float, url):
+    def insert_zap_report(self, timestamp: datetime, plugins:list, raw_data: dict, duration: float, url):
         engine = self._check_engine()
         _tables = []
         _data_dump = json.dumps(raw_data)
@@ -89,7 +89,6 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="zap scan",
                 scanner="zap",
-                path=file_path,
                 total_vulnerabilities=len(raw_data["runs"][0]["results"]),
                 critical_count=utils.critical_counter(raw_data)
             )

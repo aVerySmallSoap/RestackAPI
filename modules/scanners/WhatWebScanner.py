@@ -1,6 +1,8 @@
 import json
 import os
+import time
 
+import aiofiles
 import docker
 
 from modules.interfaces.IAsyncScannerAdapter import IAsyncScannerAdapter
@@ -8,10 +10,19 @@ from modules.utils.load_configs import DEV_ENV
 
 
 class WhatWebAdapter(IAsyncScannerAdapter):
+    _base_whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}"
+    _searchVulns_path = DEV_ENV["report_paths"]["searchVulns"]
 
-    async def start_scan(self, url:str, config: dict = None):
+    async def start_scan(self, url:str, session: str):
         self._check_files()
-        await self._launch_mounted_container(url, config["session_name"])
+        await self._launch_mounted_container(url, session)
+        tech_list = self.parse_results(session)
+        if tech_list.__contains__("error"):
+            return tech_list, {"error": True, "message": "No technologies found"}
+        elif len(tech_list["data"][0]) > 0 or tech_list["data"][0] is not None:
+            return tech_list, self._query_search_vulns(tech_list.get("data")[0], session)
+        else:
+            return tech_list, {"error": True, "message": "No technologies found"}
 
     def stop_scan(self, scan_id: str | int) -> int:
         """TBD"""
@@ -21,15 +32,14 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         """TBD"""
         pass
 
-    def parse_results(self, path: str) -> dict:
-        #TODO: Make use of session names and session IDs
+    def parse_results(self, session: str) -> dict:
         _excluded = ["UncommonHeaders", "Open-Graph-Protocol", "Title", "Frame", "Script"]
         _trivial = ["Email", "Script", "IP", "Country", "HTTPServer"]
         _versioned_tech = []
         _tech = []
         _cookies = []
         _extra = []
-        with open(path, "r+") as _:
+        with open(f"{self._base_whatweb_path}\\{session}.json", "r+") as _:
             report = json.load(_)
             print(report)
             if len(report) <= 0 or report is None:
@@ -54,15 +64,14 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                 _tech.append({plugin: content})
         return {"data": [_versioned_tech, _tech, _cookies, _extra]}
 
-    async def async_parse(self, path: str) -> dict:
-        #TODO: Make use of session names and session IDs
+    async def async_parse(self, session: str) -> dict:
         _excluded = ["UncommonHeaders", "Open-Graph-Protocol", "Title", "Frame", "Script"]
         _trivial = ["Email", "Script", "IP", "Country", "HTTPServer"]
         _versioned_tech = []
         _tech = []
         _cookies = []
         _extra = []
-        with open(path, "r+") as _:
+        with aiofiles.open(f"{self._base_whatweb_path}\\{session}.json", "r+") as _:
             report = json.load(_)
             print(report)
             if len(report) <= 0 or report is None:
@@ -88,22 +97,22 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         return {"data": [_versioned_tech, _tech, _cookies, _extra]}
 
     @staticmethod
-    async def _launch_mounted_container(url: str, session_name: str):
+    async def _launch_mounted_container(url: str, session: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "--verbose", "--log-json", f"./reports/{session_name}.json", url],
+                              ["./whatweb", "--verbose", "--log-json", f"./reports/{session}.json", url],
                               volumes={
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True,
                               name="whatweb")
 
     @staticmethod
-    async def start_automatic_scan(url: str, session_name: str):
+    async def start_automatic_scan(url: str, session: str):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "--verbose", "--log-json", f"./reports/{session_name}.json", url],
+                              ["./whatweb", "--verbose", "--log-json", f"./reports/{session}.json", url],
                               volumes={
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True)
@@ -127,3 +136,59 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         """Checks to see if a file exists, if not, creates a new file; else, remove the files contents"""
         if not os.path.isdir(DEV_ENV["report_paths"]["whatweb"]):
             os.makedirs(DEV_ENV["report_paths"]["whatweb"])
+
+    def _query_search_vulns(self, technology: list[dict]|str, session: str):
+        """
+        Queries vulnerabilities found in a fingerprinted technology.
+        :param technology: a technology or list of technologies
+        :param session: name of the session
+        """
+        if technology is None or len(technology) == 0:
+            return {"error": True, "message": "No technologies found"}
+        _temp = []
+        _commands = ["./search_vulns.py", "-u", "--include-single-version-vulns", "-f", "json", "-o",
+                     f"/home/search_vulns/reports/{session}.json"]
+        if type(technology) is str:
+            _temp.append(f"{technology}")
+        else:
+            for dictionary in technology:
+                for key, value in dictionary.items():
+                    if type(value) is list:  # multiple versions detected
+                        for version in value:
+                            _temp.append(f"{key} {version}")
+                    else:
+                        _temp.append(f"{key} {value}")
+        for query in _temp:
+            _commands.append("-q")
+            _commands.append(query)
+
+        # Can be changed to a more bash environment where we do docker exec into a running container with the command
+        # This can incur less overhead of starting a new container and monitor the health of the running one.
+        client = docker.from_env()
+
+        if len(_commands) == 0:  # No fingerprinted technology with versions are found
+            return {"error": True, "message": "No technologies found"}
+
+        try:
+            container = client.containers.run(
+                "search_vulns",
+                tty=True,
+                volumes={f"{self._searchVulns_path}": {"bind": "/home/search_vulns/reports", "mode": "rw"}},
+                command=_commands,
+                detach=True
+            )
+            while container.status == "running":
+                print("Still querying with search_vulns...")
+                time.sleep(2)
+            with open(f"{self._searchVulns_path}\\{session}.json", "r") as f:
+                queries = json.load(f)
+                _returnable = {"found": {}, "not_found": []}
+                for key, value in queries.items():
+                    if type(value) is list:
+                        _returnable["found"][key] = value
+                    else:
+                        _returnable["not_found"].append({key: "No vulnerabilities found"})
+                return _returnable
+        except Exception as e:
+            print(f"An error occurred: \n {e}")
+            return {"error": True, "message": "No technologies found"}

@@ -14,7 +14,6 @@ class Report(Base):
     scan_date: Mapped[datetime]
     scanner: Mapped[str] = mapped_column(String(50))
     scan_type: Mapped[str] = mapped_column(String(50))
-    path: Mapped[str]
     total_vulnerabilities: Mapped[int]
     critical_count: Mapped[int]
     scan = relationship("Scan", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)

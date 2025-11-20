@@ -1,13 +1,16 @@
 import asyncio
 import random
+import time
 import uuid
 
 from loguru import logger
 
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType
-from modules.scanners.ThreadableWapitiScanner import ThreadableWapitiScanner
-from modules.scanners.ThreadableZapScanner import ThreadableZapScanner
-from modules.utils.__utils__ import is_port_in_use, generate_random_uuid
+from modules.scanners.ThreadableZapScanner import ZapScanner
+from modules.scanners.WapitiScanner import WapitiAdapter
+from modules.scanners.WhatWebScanner import WhatWebAdapter
+import modules.utils.__utils__ as utilities
+import modules.utils.docker_utils as docker_utilities
 
 
 class ScannerManager:
@@ -33,10 +36,13 @@ class ScannerManager:
         scanner_type = config.get("scanner_type")
         if scanner_type is None:
             logger.error("{object} does not exist or is null", scanner_type)
-            raise() # Throw no scan type defined error
+            raise ValueError  # Throw no scan type defined error
         elif not isinstance(scanner_type, ScannerType):
             logger.error("{obj} is not of type {type}", scanner_type, type(ScannerType))
-            raise() # Throw invalid scanner type
+            raise TypeError # Throw invalid scanner type
+
+        # init required objects for scanning ( extra info tools like whatweb, search_vulns, etc )
+        _whatweb_scanner = WhatWebAdapter()
 
         match scanner_type:
             case ScannerType.ZAP:
@@ -44,10 +50,10 @@ class ScannerManager:
                 scan_type = config.get("scan_type")
                 if scan_type is None:
                     logger.error("{object} does not exist or is null", scan_type)
-                    raise ()  # Throw no scan type defined error
+                    raise ValueError  # Throw no scan type defined error
                 elif not isinstance(scan_type, ZAPScanType):
                     logger.error("{obj} is not of type {type}", scan_type, type(ZAPScanType))
-                    raise ()  # Throw invalid scan type
+                    raise TypeError  # Throw invalid scan type
 
                 # Check if api_key and port is present in config
                 logger.info("Checking parameters for a valid zap scan")
@@ -58,26 +64,42 @@ class ScannerManager:
                     if config.get("port") is None or type(config.get("port")) is not int:
                         logger.warning("A port was not properly defined, looking for an open port to use...")
                         _default_port = 8080
-                        while is_port_in_use(_default_port):
+                        while utilities.is_port_in_use(_default_port):
                             logger.warning("Port {port} was already in use, looking for another port...", _default_port)
                             _default_port = random.randint(300, 10000)
+                        config["port"] = _default_port
                 except Exception:
                     logger.exception("Something went wrong when checking for valid zap parameters! Please see the log file!")
 
-                zap_scan_object = ThreadableZapScanner()
-                await asyncio.to_thread(
-                    zap_scan_object.start_scan,
+                logger.info("Starting a whatweb query...")
+                _raw_whatweb_results, _query_results = await _whatweb_scanner.start_scan(url, session)
+
+                zap_scan_object = ZapScanner()
+                logger.info("Spawning a new container in docker...")
+                container = docker_utilities.start_automatic_zap_service(
+                    {
+                        "port": config.get("port"),
+                        "apikey": config.get("api_key"),
+                        "session_name": session
+                    }
+                )
+                await asyncio.sleep(120) # Wait for the container to run
+                logger.info("Starting a zap scan in the backgroud...")
+                _zap_result = zap_scan_object.start_scan(
                     {
                         "scanner_type": scan_type,
                         "api_key": config.get("api_key"),
                         "port": config.get("port"),
-                        "session": config.get("session"),
+                        "session": session,
+                        "url": url,
+                        "scan_type": ZAPScanType.PASSIVE,
                         "threadable_instance": zap_scan_object
                     }
                 )
-
+                container.stop()
+                return _zap_result, _query_results, _raw_whatweb_results
             case ScannerType.WAPITI:
-                wapiti_scan_object = ThreadableWapitiScanner()
+                wapiti_scan_object = WapitiAdapter()
                 await asyncio.to_thread(
                     wapiti_scan_object.start_scan
                 )
@@ -85,9 +107,12 @@ class ScannerManager:
                 pass
             case _:
                 # log
-                raise() # There is no valid argumentor match that was passed here
+                raise ValueError # There is no valid argumentor match that was passed here
 
-    async def poll_running_scans(self, scan_id: str):
+    def _run_start_scan(self, url: str, session: str, **config):
+        return asyncio.run(self.start_scan(url, session, **config))
+
+    def poll_running_scans(self, scan_id: str):
         if scan_id is None:
             return {"error": True, "message": "Invalid scan_id"}
         elif type(scan_id) is not str:
@@ -105,8 +130,23 @@ class ScannerManager:
 
     def generate_unique_session(self) -> str:
         if len(self._active_scans) == 0:
-            return generate_random_uuid()
-        _session = generate_random_uuid()
+            return utilities.generate_random_uuid()
+        _session = utilities.generate_random_uuid()
         while self._active_scans.get(_session):
-            _session = generate_random_uuid()
+            _session = utilities.generate_random_uuid()
         return _session
+
+    @staticmethod
+    def generate_random_config() -> dict:
+        """
+        Generates a random configuration for ZAP scans.
+        :return: A dict with both api_key and port filled
+        """
+        _default_port = random.randint(300, 10000)
+        while utilities.is_port_in_use(_default_port):
+            _default_port = random.randint(300, 10000)
+        return {"api_key": str(uuid.uuid4()), "port": _default_port}
+
+    @logger.catch
+    def _run_blocking_activities(self):
+        pass
