@@ -39,7 +39,8 @@ class Database:
         engine = self._check_engine()
         Base.metadata.create_all(engine)
 
-    def insert_wapiti_quick_report(self, timestamp: datetime, file_path:str, plugins: list, raw_data: dict, duration: float):
+    def insert_wapiti_quick_report(self, timestamp: datetime, file_path: str, plugins: list, raw_data: dict,
+                                   duration: float, url: str = "N/A"):
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
@@ -50,8 +51,8 @@ class Database:
                 scan_type="wapiti scan",
                 scanner="wapiti",
                 path=file_path,
-                total_vulnerabilities=raw_data["vulnerability_count"],
-                critical_count=raw_data["critical_vulnerabilities"]
+                total_vulnerabilities=len(raw_data["runs"][0]["results"]),
+                critical_count=utils.critical_counter(raw_data)
             )
             tech_disc = TechDiscovery(
                 id=str(uuid.uuid4()),
@@ -66,10 +67,10 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="wapiti",
                 scan_type="wapiti scan",
-                data=raw_data["parsed"],
-                crawl_depth=raw_data["extra"]["crawled_pages_nbr"],
+                data=raw_data,
+                crawl_depth=0,
                 scan_duration=floor(duration),
-                target_url=raw_data["extra"]["target"]
+                target_url=url
             )
             _tables.append(tech_disc)
             _tables.append(scan)

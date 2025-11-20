@@ -119,7 +119,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
             _wapiti_path,
             _whatweb_results["message"],
             _report,
-            scan_time
+            scan_time,
+            _URL
         )
         return {
             "data": _report,
@@ -135,7 +136,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
             _wapiti_path,
             _whatweb_results["data"],
             _report,
-            scan_time
+            scan_time,
+            _URL
         )
         return {
             "data": _report,
@@ -441,14 +443,13 @@ async def scan(request: ScanRequest) -> dict:
             _URL
         )
         return {
-            "data": _results,
+              "data": _results,
             "plugins": {
                 "fingerprinted": _whatweb_results["data"],
                 "patchable": _query_results
             },
             "scan_time": scan_time
         }
-
 
 @app.post("/api/v1/scan/full")
 async def scan_full(request: ScanRequest) -> dict:
