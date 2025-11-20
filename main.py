@@ -2,11 +2,14 @@ import asyncio
 import json
 import time
 import aiofiles
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from services.FileReportGenerator import generate_excel, generate_pdf
 from pydantic import BaseModel, AnyUrl
 from loguru import logger
 
@@ -455,3 +458,31 @@ async def scan(request: ScanRequest) -> dict:
 async def scan_full(request: ScanRequest) -> dict:
     """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with user-defined configurations"""
     raise HTTPException(status_code=500, detail="Not Yet Implemented")
+
+
+@app.get("/api/v1/report/{report_id}/export/excel")
+async def export_excel(report_id: str):
+    """Generates and downloads the Excel report"""
+    result = generate_excel(report_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+
+    return FileResponse(
+        result["path"],
+        filename=os.path.basename(result["path"]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+@app.get("/api/v1/report/{report_id}/export/pdf")
+async def export_pdf(report_id: str):
+    """Generates and downloads the PDF report"""
+    result = generate_pdf(report_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+
+    return FileResponse(
+        result["path"],
+        filename=os.path.basename(result["path"]),
+        media_type="application/pdf"
+    )
