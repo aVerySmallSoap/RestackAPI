@@ -35,7 +35,7 @@ def critical_counter(sarif_report: dict, rules: dict | list = None) -> int:
             _rule = _rules.get(vulnerability["ruleId"])
             if _rule["properties"].get("risk") is None:
                 # Wapiti
-                if str.lower(_rule["level"]) == "error":
+                if str.lower(vulnerability.get("level", "")) == "error":
                     count += 1
             else:
                 if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(
