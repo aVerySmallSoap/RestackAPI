@@ -75,15 +75,6 @@ class ScannerManager:
                 _raw_whatweb_results, _query_results = await _whatweb_scanner.start_scan(url, session)
 
                 zap_scan_object = ZapScanner()
-                logger.info("Spawning a new container in docker...")
-                container = docker_utilities.start_automatic_zap_service(
-                    {
-                        "port": config.get("port"),
-                        "apikey": config.get("api_key"),
-                        "session_name": session
-                    }
-                )
-                await asyncio.sleep(120) # Wait for the container to run
                 logger.info("Starting a zap scan in the backgroud...")
                 _zap_result = zap_scan_object.start_scan(
                     {
@@ -92,11 +83,9 @@ class ScannerManager:
                         "port": config.get("port"),
                         "session": session,
                         "url": url,
-                        "scan_type": ZAPScanType.PASSIVE,
-                        "threadable_instance": zap_scan_object
+                        "scan_type": ZAPScanType.PASSIVE
                     }
                 )
-                container.stop()
                 return _zap_result, _query_results, _raw_whatweb_results
             case ScannerType.WAPITI:
                 wapiti_scan_object = WapitiAdapter()

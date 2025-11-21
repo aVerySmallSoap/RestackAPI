@@ -1,8 +1,8 @@
 import json
+import shutil
 import time
 from urllib import parse as url_parser
 
-import aiofiles
 import requests
 from zapv2 import ZAPv2
 
@@ -11,9 +11,11 @@ from modules.interfaces.enums.restack_enums import ZAPScanType
 from modules.utils.load_configs import DEV_ENV
 from loguru import logger
 
+import modules.utils.docker_utils as docker_utilities
 
 class ZapScanner(IScannerAdapter):
     _base_zap_path = f"{DEV_ENV['report_paths']['zap']}"
+    _timeout = 300
 
     def __init__(self):
         pass
@@ -21,9 +23,31 @@ class ZapScanner(IScannerAdapter):
     @logger.catch
     def start_scan(self, config: dict, **kwargs):
         zap: ZAPv2
-        scan_object = kwargs.get('threadable_instance')
-        if scan_object is None or not isinstance(scan_object, ZapScanner):
-            scan_object = ZapScanner()
+        logger.info("Spawning a new container in docker...")
+        container = docker_utilities.start_automatic_zap_service(
+            {
+                "port": config.get("port"),
+                "apikey": config.get("api_key"),
+                "session_name": config.get("session")
+            }
+        )
+        _start_time = time.time()
+        while time.time() - _start_time < self._timeout:
+            try:
+                logger.debug("Sending a request to ZAP...")
+                response = requests.get(f"http://localhost:{config.get('port')}/JSON/core/view/version/", params={"apikey": config.get("api_key")}, timeout=30)
+                if response.status_code == 200:
+                    print("Received ZAP response")
+                    logger.info("Zap API was found and is ready! Version {version}", response.json().get("version"))
+                    break
+            except requests.exceptions.ConnectionError:
+                logger.debug("Zap API is not responding, we will try again...")
+                time.sleep(30)
+            except Exception as e:
+                # print(type(e)) # ConnectionError
+                logger.error("We could not find the Zap API")
+                time.sleep(30)
+        logger.debug("Trying to run a scan now")
 
         if config.get("zap_instance") is None:
             # Try to recreate zap
@@ -41,31 +65,32 @@ class ZapScanner(IScannerAdapter):
             match config["scan_type"]:
                 case ZAPScanType.PASSIVE:
                     logger.info("Starting a passive scan run...")
-                    scan_object.start_passive_scan(
+                    self.start_passive_scan(
                         zap,
                         api_key=config.get("api_key"),
                         port=config.get("port"),
                         session=config.get("session"),
                         url=config.get("url")
                     )
-                    _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
-                    logger.info("Zap scan completed successfully.")
-                    return _returnable
                 case ZAPScanType.ACTIVE:
                     logger.info("Starting an active scan run...")
-                    scan_object.start_active_scan(
+                    self.start_active_scan(
                         zap,
                         api_key=config.get("api_key"),
                         port=config.get("port"),
                         session=config.get("session"),
                         url=config.get("url")
                     )
-                    _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
-                    logger.info("Zap scan completed successfully.")
-                    return _returnable
                 case _:
                     # log
                     raise TypeError  # There is no valid argumentor match that was passed here
+            _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
+            logger.info("Zap scan completed successfully.")
+            logger.debug("Cleaning up containers and associated directories...")
+            container.stop()
+            container.remove()
+            shutil.rmtree(f"{self._base_zap_path}\\{config.get('session')}")
+            return _returnable
         except TypeError as type_e:
             # log
             print(f"The passed object is not of type {type(ZAPScanType)}\n{type_e}")
@@ -86,7 +111,7 @@ class ZapScanner(IScannerAdapter):
         try:
             _har_alerts = self._fetch_header_and_request_alerts(config.get("zap_instance"), session=config.get("session"))
             with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
-                report = json.loads(f)
+                report = json.load(f)
                 _sarif = {
                     "version": "2.1.0",
                     "runs": [
@@ -172,13 +197,13 @@ class ZapScanner(IScannerAdapter):
 
     @logger.catch
     def start_passive_scan(self, zap: ZAPv2, **config):
-        self._context_lookup(zap, config)
+        self._context_lookup(zap, url=config.get("url"))
         logger.info(f"Starting a zap scan in the passive mode...")
         try:
             while int(zap.pscan.records_to_scan) > 0:
                 time.sleep(2)
 
-            with aiofiles.open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
+            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
                 file.write(
                     json.dumps(
                         zap.core.alerts(baseurl=config.get("url"))
@@ -192,14 +217,13 @@ class ZapScanner(IScannerAdapter):
 
     @logger.catch
     def start_active_scan(self, zap: ZAPv2, **config):
-        self._context_lookup(zap, config)
-
+        self._context_lookup(zap, url=config.get("url"))
         try:
             scan_id = zap.ascan.scan(config.get("url"), recurse=True)
             while int(zap.ascan.status(scan_id)) < 100:
                 #log
                 time.sleep(2)
-            with aiofiles.open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
+            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
                 file.write(json.dumps(zap.core.alerts(baseurl=config.get("url"))))
                 file.flush()
                 file.close()
@@ -210,7 +234,7 @@ class ZapScanner(IScannerAdapter):
     @staticmethod
     @logger.catch
     def _context_lookup(zap: ZAPv2, **config):
-        logger.info("Starting a context lookup of {url}", config.get("url"))
+        logger.info("Starting a context lookup")
         try:
             # Start of context lookup
             zap.core.access_url(config.get("url"), followredirects=True)
@@ -274,8 +298,8 @@ class ZapScanner(IScannerAdapter):
     def _fetch_header_and_request_alerts(self, zap: ZAPv2, **config) -> dict:
         logger.info("Fetching headers and request alerts...")
         with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
-            report = json.loads(f)
-            message_ids:str
+            report = json.load(f)
+            message_ids:str = ""
             for alert in report:
                 message_ids += str(alert.get("sourceMessageId")) + ","
             message_ids.removesuffix(",") # remove trailing comma

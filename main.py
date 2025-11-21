@@ -97,21 +97,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
     _report = _wapiti_scanner.parse_results(_wapiti_path)
 
     # WhatWeb scan
-    await _whatweb_scanner.start_scan(_URL, {"session_name": session_name})
-    _whatweb_results = _whatweb_scanner.parse_results(_whatweb_path)
-
-    # SearchVulns Query
-    _query_results = {}
-    if _whatweb_results.__contains__("error"):
-        _query_results = None
-    elif len(_whatweb_results["data"][0]) > 0 or _whatweb_results["data"][0] is not None:
-        has_results = vuln_search_query(_whatweb_results["data"][0], session_name)
-        if has_results:
-            _query_results = parse_query(session_name)
-        else:
-            _query_results = None
-    else:
-        _query_results = None
+    _whatweb_results, _query_results = await _whatweb_scanner.start_scan(_URL, session_name)
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start

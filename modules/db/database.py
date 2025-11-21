@@ -50,7 +50,6 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="wapiti scan",
                 scanner="wapiti",
-                path=file_path,
                 total_vulnerabilities=len(raw_data["runs"][0]["results"]),
                 critical_count=utils.critical_counter(raw_data)
             )
@@ -131,7 +130,6 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="full scan",
                 scanner="all",
-                path=file_path,
                 total_vulnerabilities=len(analytics_data["union"][0])+len(analytics_data["union"][1]),
                 critical_count=utils.critical_counter(analytics_data["union"], analytics_data["rules"]),
             )
