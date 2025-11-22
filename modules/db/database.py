@@ -1,22 +1,21 @@
 import datetime
 import json
+import uuid
 from math import floor
 from warnings import deprecated
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy_utils import database_exists, create_database
-import uuid
-import modules.utils.__utils__ as utils
 
+import modules.utils.__utils__ as utils
 from modules.db.session import Base
 from modules.db.table_collection import Report, TechDiscovery, Scan, Vulnerability
 
 
 class Database:
-
     _engine = None
-    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack" #TODO: Change to ENV when deploying
+    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack"  # TODO: Change to ENV when deploying
 
     def __int__(self):
         pass
@@ -39,7 +38,7 @@ class Database:
         engine = self._check_engine()
         Base.metadata.create_all(engine)
 
-    def insert_wapiti_quick_report(self, timestamp: datetime, file_path: str, plugins: list, raw_data: dict,
+    def insert_wapiti_quick_report(self, timestamp: datetime, plugins: list, raw_data: dict,
                                    duration: float, url: str = "N/A"):
         engine = self._check_engine()
         _tables = []
@@ -77,7 +76,7 @@ class Database:
             self._insert_wapiti_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
 
-    def insert_zap_report(self, timestamp: datetime, plugins:list, raw_data: dict, duration: float, url):
+    def insert_zap_report(self, timestamp: datetime, plugins: list, raw_data: dict, duration: float, url):
         engine = self._check_engine()
         _tables = []
         _data_dump = json.dumps(raw_data)
@@ -106,7 +105,7 @@ class Database:
                 scanner="zap",
                 scan_type="zap scan",
                 data=_data_dump,
-                crawl_depth=0, #TODO: fetch crawler results and add data here
+                crawl_depth=0,  # TODO: fetch crawler results and add data here
                 scan_duration=floor(duration),
                 target_url=url
             )
@@ -116,7 +115,7 @@ class Database:
             self._insert_zap_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
 
-    def insert_scan_report(self, timestamp: datetime, file_path: str, plugins:list,
+    def insert_scan_report(self, timestamp: datetime, plugins: list,
                            zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):
         engine = self._check_engine()
         _tables = []
@@ -130,7 +129,7 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="full scan",
                 scanner="all",
-                total_vulnerabilities=len(analytics_data["union"][0])+len(analytics_data["union"][1]),
+                total_vulnerabilities=len(analytics_data["union"][0]) + len(analytics_data["union"][1]),
                 critical_count=utils.critical_counter(analytics_data["union"], analytics_data["rules"]),
             )
             _tables.append(report)
@@ -139,7 +138,7 @@ class Database:
                 report_id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 data=_plugins_dump
-            ) # Search_vulns table??
+            )  # Search_vulns table??
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
@@ -173,7 +172,8 @@ class Database:
                 vulnerability_type=_rule["name"],
                 severity=_rule["properties"]["risk"],
                 description=_rule["fullDescription"]["text"],
-                http_request= json.dumps(vulnerability["properties"]["har"]) if vulnerability["properties"]["har"] is not None else None,
+                http_request=json.dumps(vulnerability["properties"]["har"]) if vulnerability["properties"][
+                                                                                   "har"] is not None else None,
                 endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
                 remediation_effort=_rule["help"]["text"],
                 method=vulnerability["properties"]["method"],
@@ -184,9 +184,8 @@ class Database:
             _entries.append(_vuln)
         session.add_all(_entries)
 
-
     @staticmethod
-    def _insert_wapiti_vulnerabilities(parent_report_id: str, scan_time: datetime, raw_data:dict, session: Session):
+    def _insert_wapiti_vulnerabilities(parent_report_id: str, scan_time: datetime, raw_data: dict, session: Session):
         _entries = []
         _rules = utils.unroll_sarif_rules(raw_data)
         for vulnerability in raw_data["runs"][0]["results"]:
@@ -208,7 +207,7 @@ class Database:
                 scanner="wapiti",
                 vulnerability_type=_rule["shortDescription"]["text"],
                 description=_rule["fullDescription"]["text"],
-                severity= _severity,
+                severity=_severity,
                 http_request=vulnerability["properties"]["http_request"],
                 endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
                 remediation_effort=_rule["help"]["text"],

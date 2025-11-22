@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 class IScannerAdapter(ABC):
 
     @abstractmethod
-    async def start_scan(self, config: dict, **kwargs):
+    def start_scan(self, config: dict, **kwargs):
         pass
 
     @abstractmethod
@@ -13,8 +13,4 @@ class IScannerAdapter(ABC):
 
     @abstractmethod
     def parse_results(self, **config) -> dict:
-        pass
-
-    @abstractmethod
-    def start_blocking_scan(self, config: dict, **kwargs):
         pass

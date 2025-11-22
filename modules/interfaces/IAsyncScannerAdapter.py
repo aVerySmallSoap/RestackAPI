@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
 
+
 class IAsyncScannerAdapter(ABC):
     """Same as the IScannerAdapter interface but some of its methods are awaitable"""
+
     @abstractmethod
-    async def start_scan(self, config: dict, url:str):
+    async def start_scan(self, config: dict, url: str):
         pass
 
     @abstractmethod
-    def stop_scan(self, scan_id: str|int) -> int:
+    def stop_scan(self, scan_id: str | int) -> int:
         pass
 
     @abstractmethod

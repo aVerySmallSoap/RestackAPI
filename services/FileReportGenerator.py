@@ -9,18 +9,18 @@
 # TECHNOLOGIES FINGERPRINTED || TECHNOLOGY | VERSION | IS_VULNERABLE | CVE's
 # VULNERABILITIES TABLE || Results should also be filtered with medium risk as to not overpopulate the table
 # VULNERABILITIES || TYPE | CVE's | TOOL | ENDPOINT | CONFIDENCE | RISK
-import os
-import pandas as pd
-from sqlalchemy.orm import Session
-from sqlalchemy import select
 import json
+import os
 
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+import pandas as pd
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from modules.db.database import Database
 from modules.db.table_collection import Scan, TechDiscovery, Vulnerability
@@ -185,12 +185,13 @@ def generate_excel(report_id: str):
                         try:
                             if len(str(cell.value)) > max_length:
                                 max_length = len(str(cell.value))
-                        except:
+                        except Exception:
                             pass
                     adjusted_width = (max_length + 2)
                     worksheet.column_dimensions[column].width = adjusted_width
 
     return {"message": "Report generated successfully", "path": output_path}
+
 
 def _add_header_footer(canvas, doc):
     """
@@ -225,6 +226,7 @@ def _add_header_footer(canvas, doc):
     canvas.drawRightString(letter[0] - inch, 0.5 * inch, f"Page {page_num}")
 
     canvas.restoreState()
+
 
 def generate_pdf(report_id: str):
     """

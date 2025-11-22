@@ -1,20 +1,17 @@
 import asyncio
 import random
-import time
 import uuid
 
 from loguru import logger
 
+import modules.utils.__utils__ as utilities
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType
-from modules.scanners.ThreadableZapScanner import ZapScanner
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
-import modules.utils.__utils__ as utilities
-import modules.utils.docker_utils as docker_utilities
+from modules.scanners.ZapScanner import ZapScanner
 
 
 class ScannerManager:
-
     _active_scans = {}
 
     @logger.catch
@@ -39,9 +36,9 @@ class ScannerManager:
             raise ValueError  # Throw no scan type defined error
         elif not isinstance(scanner_type, ScannerType):
             logger.error("{obj} is not of type {type}", scanner_type, type(ScannerType))
-            raise TypeError # Throw invalid scanner type
+            raise TypeError  # Throw invalid scanner type
 
-        # init required objects for scanning ( extra info tools like whatweb, search_vulns, etc )
+        # init required objects for scanning ( extra info tools like whatweb, search_vulns, etc.)
         _whatweb_scanner = WhatWebAdapter()
 
         match scanner_type:
@@ -69,7 +66,8 @@ class ScannerManager:
                             _default_port = random.randint(300, 10000)
                         config["port"] = _default_port
                 except Exception:
-                    logger.exception("Something went wrong when checking for valid zap parameters! Please see the log file!")
+                    logger.exception(
+                        "Something went wrong when checking for valid zap parameters! Please see the log file!")
 
                 logger.info("Starting a whatweb query...")
                 _raw_whatweb_results, _query_results = await _whatweb_scanner.start_scan(url, session)
@@ -83,20 +81,33 @@ class ScannerManager:
                         "port": config.get("port"),
                         "session": session,
                         "url": url,
-                        "scan_type": ZAPScanType.PASSIVE
+                        "scan_type": config.get("scan_type")
                     }
                 )
                 return _zap_result, _query_results, _raw_whatweb_results
             case ScannerType.WAPITI:
-                wapiti_scan_object = WapitiAdapter()
-                await asyncio.to_thread(
-                    wapiti_scan_object.start_scan
+                wapiti_instance = config.get("wapiti_instance")
+                wapiti_config = config.get("wapiti_config")
+
+                if wapiti_instance is None:
+                    logger.warning("No wapiti scanner instance detected, creating a new instance...")
+                    wapiti_instance = WapitiAdapter()
+                if wapiti_config is None:
+                    logger.warning("There was no configuration set for wapiti, generating a default configuration...")
+                    wapiti_config = wapiti_instance.generate_config({
+                        "modules": ["all"]
+                    })
+
+                return wapiti_instance.start_scan(
+                    {
+                        "url": url,
+                        "session": session,
+                        "wapiti_config": wapiti_config
+                    }
                 )
-            case ScannerType.FULL:
-                pass
             case _:
                 # log
-                raise ValueError # There is no valid argumentor match that was passed here
+                raise ValueError  # There is no valid argumentor match that was passed here
 
     def _run_start_scan(self, url: str, session: str, **config):
         return asyncio.run(self.start_scan(url, session, **config))
@@ -113,8 +124,8 @@ class ScannerManager:
             else:
                 return {"status": 200, "message": "success", "data": scan}
         except Exception as e:
-            #log
-            print(e) # Something unexpected happened here
+            # log
+            print(e)  # Something unexpected happened here
             return {"error": True, "message": "Internal Server Error"}
 
     def generate_unique_session(self) -> str:
@@ -135,7 +146,3 @@ class ScannerManager:
         while utilities.is_port_in_use(_default_port):
             _default_port = random.randint(300, 10000)
         return {"api_key": str(uuid.uuid4()), "port": _default_port}
-
-    @logger.catch
-    def _run_blocking_activities(self):
-        pass

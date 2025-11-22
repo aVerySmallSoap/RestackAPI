@@ -1,26 +1,29 @@
 from typing import Optional
 
+from loguru import logger
+
 from modules.interfaces.builders.IConfigBuilder import IConfigBuilder
 from modules.interfaces.enums.restack_enums import WapitiArgs
 from modules.utils.load_configs import DEV_ENV
 
 
 class WapitiConfigBuilder(IConfigBuilder):
-    _args:list[str] = ["-u", "-m", "-o", "-S", "--max-scan-time", "--tasks"]
-    _commands:list[str] = ["wapiti", "-v", "0", "-f", "json", "-l", "2","--headless", "hidden", "--flush-session"]
+    _wapiti_base_path = DEV_ENV["report_paths"]["wapiti"]
+    _args: list[str] = ["-u", "-m", "-o", "-S", "--max-scan-time", "--tasks"]
+    _commands: list[str] = ["wapiti", "-v", "0", "-f", "json", "-l", "2", "--headless", "hidden", "--flush-session"]
 
-    #== Configurable ==
-    _url: Optional[str] = None # Flag: -u !!REQUIRED
-    _modules: Optional[list[str]] = None # Flag: -m
-    _path: Optional[str] = None # Flag: -o
-    _scan: Optional[str] = None # Flag: -S | Scan aggression type
-    _scan_time: Optional[str] = None # Flag: --max-scan-time
-    _concurrent_tasks: Optional[str] = None # Flag: --tasks
+    # == Configurable ==
+    _url: Optional[str] = None  # Flag: -u !!REQUIRED
+    _modules: Optional[list[str]] = None  # Flag: -m
+    _path: Optional[str] = None  # Flag: -o
+    _scan: Optional[str] = None  # Flag: -S | Scan aggression type
+    _scan_time: Optional[str] = None  # Flag: --max-scan-time
+    _concurrent_tasks: Optional[str] = None  # Flag: --tasks
     _custom_args: Optional[list[str]] = None
-    _is_overridden: bool = False # Check if the user overrides with special custom arguments
+    _is_overridden: bool = False  # Check if the user overrides with special custom arguments
 
-    #== validation ==
-    _invalid_args:list[WapitiArgs] = []
+    # == validation ==
+    _invalid_args: list[WapitiArgs] = []
 
     def url(self, url: str):
         self._url = url
@@ -33,9 +36,14 @@ class WapitiConfigBuilder(IConfigBuilder):
         self._modules = modules
         return self
 
-    def output_path(self, path: str = f"{DEV_ENV["report_paths"]["wapiti"]}\\report.json"):
-        self._path = path
-        return self
+    def output_path(self, session: str):
+        try:
+            if session is None:
+                raise ValueError
+            self._path = f"{self._wapiti_base_path}\\{session}.json"
+            return self
+        except ValueError:
+            logger.error("There should always be a session!")
 
     def scan_aggression(self, level: str = "normal"):
         self._scan = level
@@ -58,7 +66,7 @@ class WapitiConfigBuilder(IConfigBuilder):
 
     def validate_args(self) -> bool:
         """Check if all arguments are valid."""
-        if self._url is None: # Find a better way to do this lol
+        if self._url is None:  # Find a better way to do this lol
             self._invalid_args.append(WapitiArgs.URL)
         if self._modules is None:
             self._invalid_args.append(WapitiArgs.MODULES)
@@ -85,7 +93,7 @@ class WapitiConfigBuilder(IConfigBuilder):
                     case WapitiArgs.MODULES:
                         self.modules(["common"])
                     case WapitiArgs.PATH:
-                        self.output_path()
+                        self.output_path("invalid")
                     case WapitiArgs.SCAN_TYPE:
                         self.scan_aggression()
                     case WapitiArgs.SCAN_TIME:

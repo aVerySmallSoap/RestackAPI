@@ -12,17 +12,18 @@ from modules.utils.load_configs import DEV_ENV
 class WhatWebAdapter(IAsyncScannerAdapter):
     _base_whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}"
     _searchVulns_path = DEV_ENV["report_paths"]["searchVulns"]
+    _NO_TECH_MESSAGE = "No technologies found"
 
-    async def start_scan(self, url:str, session: str):
+    async def start_scan(self, url: str, session: str):
         self._check_files()
         await self._launch_mounted_container(url, session)
         tech_list = self.parse_results(session)
         if tech_list.__contains__("error"):
-            return tech_list, {"error": True, "message": "No technologies found"}
+            return tech_list, {"error": True, "message": self._NO_TECH_MESSAGE}
         elif len(tech_list["data"][0]) > 0 or tech_list["data"][0] is not None:
             return tech_list, self._query_search_vulns(tech_list.get("data")[0], session)
         else:
-            return tech_list, {"error": True, "message": "No technologies found"}
+            return tech_list, {"error": True, "message": self._NO_TECH_MESSAGE}
 
     def stop_scan(self, scan_id: str | int) -> int:
         """TBD"""
@@ -41,9 +42,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         _extra = []
         with open(f"{self._base_whatweb_path}\\{session}.json", "r+") as _:
             report = json.load(_)
-            print(report)
             if len(report) <= 0 or report is None:
-                return {"error":True, "message": "No technologies found"}
+                return {"error": True, "message": self._NO_TECH_MESSAGE}
             for plugin, content in report[0]["plugins"].items():
                 if plugin == "MetaGenerator" and len(content) > 0:
                     self._parse_meta_generator(content["string"], _versioned_tech)
@@ -73,9 +73,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         _extra = []
         with aiofiles.open(f"{self._base_whatweb_path}\\{session}.json", "r+") as _:
             report = json.load(_)
-            print(report)
             if len(report) <= 0 or report is None:
-                return {"error":True, "message": "No technologies found"}
+                return {"error": True, "message": self._NO_TECH_MESSAGE}
             for plugin, content in report[0]["plugins"].items():
                 if plugin == "MetaGenerator" and len(content) > 0:
                     self._parse_meta_generator(content["string"], _versioned_tech)
@@ -104,17 +103,6 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                               ["./whatweb", "--verbose", "--log-json", f"./reports/{session}.json", url],
                               volumes={
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
-                              auto_remove=True,
-                              name="whatweb")
-
-    @staticmethod
-    async def start_automatic_scan(url: str, session: str):
-        """Launches a docker container that utilizes the volume flag to store a whatweb report."""
-        client = docker.from_env()
-        client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "--verbose", "--log-json", f"./reports/{session}.json", url],
-                              volumes={
-                                  DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True)
 
     @staticmethod
@@ -137,14 +125,14 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         if not os.path.isdir(DEV_ENV["report_paths"]["whatweb"]):
             os.makedirs(DEV_ENV["report_paths"]["whatweb"])
 
-    def _query_search_vulns(self, technology: list[dict]|str, session: str):
+    def _query_search_vulns(self, technology: list[dict] | str, session: str):
         """
         Queries vulnerabilities found in a fingerprinted technology.
         :param technology: a technology or list of technologies
         :param session: name of the session
         """
         if technology is None or len(technology) == 0:
-            return {"error": True, "message": "No technologies found"}
+            return {"error": True, "message": self._NO_TECH_MESSAGE}
         _temp = []
         _commands = ["./search_vulns.py", "-u", "--include-single-version-vulns", "-f", "json", "-o",
                      f"/home/search_vulns/reports/{session}.json"]
@@ -167,7 +155,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         client = docker.from_env()
 
         if len(_commands) == 0:  # No fingerprinted technology with versions are found
-            return {"error": True, "message": "No technologies found"}
+            return {"error": True, "message": self._NO_TECH_MESSAGE}
 
         try:
             container = client.containers.run(
@@ -191,4 +179,4 @@ class WhatWebAdapter(IAsyncScannerAdapter):
                 return _returnable
         except Exception as e:
             print(f"An error occurred: \n {e}")
-            return {"error": True, "message": "No technologies found"}
+            return {"error": True, "message": self._NO_TECH_MESSAGE}

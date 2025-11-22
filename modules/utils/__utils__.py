@@ -5,6 +5,7 @@ import uuid
 
 from services.managers.ScannerManager import ScannerManager
 
+
 def unroll_sarif_rules(sarif_report: dict) -> dict:
     """
     Creates a dictionary from a SARIF reports rules. It assigns the id as the key and the rest of the contents as its values.
@@ -25,7 +26,6 @@ def critical_counter(sarif_report: dict, rules: dict | list = None) -> int:
     Counts the number of critical vulnerabilities
     """
     count = 0
-    print(rules)
     if rules is None:
         _rules = unroll_sarif_rules(sarif_report)
     else:
@@ -76,6 +76,7 @@ def check_url_local_test(url: str) -> str:
         return url.replace("localhost", "host.docker.internal")
     return url
 
+
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
@@ -84,8 +85,10 @@ def is_port_in_use(port: int) -> bool:
         except OSError:
             return True
 
+
 def generate_random_uuid() -> str:
     return str(uuid.uuid4())
+
 
 def run_start_scan(instance: ScannerManager, url: str, session: str, **config):
     """

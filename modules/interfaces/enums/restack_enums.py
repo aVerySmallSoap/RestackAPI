@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 # Enumerations
 
 class WapitiArgs(Enum):
@@ -11,13 +12,15 @@ class WapitiArgs(Enum):
     CONCURRENT_TASKS = 6
     CUSTOM_ARGS = 7
 
+
 # Enumerations as Types
 
 class ScannerType(Enum):
     WAPITI = 1
     ZAP = 2
-    ZAP_AUTOMATION = 3 # Future feature
+    ZAP_AUTOMATION = 3  # Future feature
     FULL = 4
+
 
 class ScanType(Enum):
     BASIC = 1
@@ -25,9 +28,10 @@ class ScanType(Enum):
     CUSTOM = 3
     AUTOMATIC = 4
 
+
 class ZAPScanType(Enum):
     PASSIVE = 1
     ACTIVE = 2
-    API = 3
-    AUTOMATIC = 4
-
+    FULL = 3
+    API = 4
+    AUTOMATIC = 5
