@@ -13,14 +13,14 @@ from modules.utils.__utils__ import check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
 
 
-async def run_scheduled_scan(scanner_manager, request, database: Database):
+async def run_scheduled_scan(scanner_manager, url, database: Database):
     # Init
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
 
     time_start = time.perf_counter()
     _scan_start = datetime.now()
-    _URL = check_url_local_test(str(request.url))
+    _URL = check_url_local_test(str(url))
     session = scanner_manager.generate_unique_session()
     zap_config = scanner_manager.generate_random_config()
     wapiti_config = _wapiti_scanner.generate_config(
@@ -72,7 +72,7 @@ async def run_scheduled_scan(scanner_manager, request, database: Database):
         )
         await f.close()
 
-        database.insert_scan_report(
+        database.insert_automated_report(
             _scan_start,
             raw_whatweb_result,
             zap_result,
@@ -96,7 +96,7 @@ async def run_scheduled_scan(scanner_manager, request, database: Database):
         )
         await f.close()
 
-        database.insert_scan_report(
+        database.insert_automated_report(
             _scan_start,
             raw_whatweb_result["data"],
             zap_result,

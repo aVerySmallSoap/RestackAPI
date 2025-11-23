@@ -384,3 +384,7 @@ async def export_pdf(report_id: str):
         filename=os.path.basename(result["path"]),
         media_type="application/pdf"
     )
+
+@app.put("/api/v1/schedule/add/{name}/{type}/{interval}/{target}")
+async def add_schedule(name: str, type: str, interval: dict, target: AnyUrl):
+    return NotImplemented()

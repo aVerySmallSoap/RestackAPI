@@ -69,6 +69,13 @@ def check_directories():
     if not os.path.exists("./temp"):
         os.mkdir("./temp")
 
+def create_required_files_and_directories():
+    """
+    This function creates required files and directories needed for the app to function.
+    However, this function does not take into account any missing API keys from third party services
+    """
+    pass
+
 
 def check_url_local_test(url: str) -> str:
     """Check if a url contains localhost or 127.0.0.1 and returns the docker equivalent"""

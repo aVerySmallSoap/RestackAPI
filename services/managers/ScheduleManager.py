@@ -82,3 +82,6 @@ class ScheduleManager:
                 else:
                     logger.info("There are no schedules found")
         return self._scheduler
+
+    async def poll_for_changes(self):
+        pass # Not yet implemented

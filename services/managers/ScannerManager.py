@@ -12,7 +12,6 @@ from modules.scanners.ZapScanner import ZapScanner
 
 
 class ScannerManager:
-    _active_scans = {}
 
     @logger.catch
     async def start_scan(self, url: str, session: str, **config):

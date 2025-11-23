@@ -172,7 +172,7 @@ class ZapScanner(IScannerAdapter):
                         "locations": [
                             {
                                 "physicalLocation": {
-                                    "artifactLocation": {"uri": url_parser.urlparse(alert.get("pluginId")).path}
+                                    "artifactLocation": {"uri": url_parser.urlparse(alert.get("url")).path}
                                 }
                             }
                         ],

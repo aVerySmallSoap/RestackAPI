@@ -157,6 +157,48 @@ class Database:
             self._insert_wapiti_vulnerabilities(report_id, timestamp, wapiti_raw_data, session)
             session.commit()
 
+    def insert_automated_report(self, timestamp: datetime, plugins: list,
+                           zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):
+        engine = self._check_engine()
+        _tables = []
+        _zap_dump = json.dumps(zap_raw_data)
+        _wapiti_dump = json.dumps(wapiti_raw_data)
+        _plugins_dump = json.dumps(plugins)
+        with Session(engine) as session:
+            report_id = str(uuid.uuid4())
+            report = Report(
+                id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                scan_type="automated",
+                scanner="all",
+                total_vulnerabilities=len(analytics_data["union"][0]) + len(analytics_data["union"][1]),
+                critical_count=utils.critical_counter(analytics_data["union"], analytics_data["rules"]),
+            )
+            _tables.append(report)
+            tech_disc = TechDiscovery(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                data=_plugins_dump
+            )  # Search_vulns table??
+            scan = Scan(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                scanner="all",
+                scan_type="full scan",
+                data=analytics_data["union"],
+                crawl_depth=0,  # TODO: fetch crawler results and add data here
+                scan_duration=floor(duration),
+                target_url=url
+            )
+            _tables.append(tech_disc)
+            _tables.append(scan)
+            session.add_all(_tables)
+            self._insert_zap_vulnerabilities(report_id, timestamp, zap_raw_data, session)
+            self._insert_wapiti_vulnerabilities(report_id, timestamp, wapiti_raw_data, session)
+            session.commit()
+
     @staticmethod
     def _insert_zap_vulnerabilities(parent_report_id: str, scan_time: datetime, raw_data: dict, session: Session):
         _entries = []
