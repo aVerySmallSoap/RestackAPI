@@ -5,10 +5,11 @@ import uuid
 from loguru import logger
 
 import modules.utils.__utils__ as utilities
-from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType
+from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapScanner
+from modules.utils.preinstances import scan_tracker
 
 
 class ScannerManager:
@@ -69,10 +70,13 @@ class ScannerManager:
                         "Something went wrong when checking for valid zap parameters! Please see the log file!")
 
                 logger.info("Starting a whatweb query...")
+                scan_tracker.advance_step(session, ScanStep.WHATWEB)
                 _raw_whatweb_results, _query_results = await _whatweb_scanner.start_scan(url, session)
+                scan_tracker.advance_step(session, ScanStep.PARSING)
 
                 zap_scan_object = ZapScanner()
                 logger.info("Starting a zap scan in the backgroud...")
+                scan_tracker.advance_step(session, ScanStep.ZAP)
                 _zap_result = zap_scan_object.start_scan(
                     {
                         "scanner_type": scan_type,
@@ -110,30 +114,6 @@ class ScannerManager:
 
     def _run_start_scan(self, url: str, session: str, **config):
         return asyncio.run(self.start_scan(url, session, **config))
-
-    def poll_running_scans(self, scan_id: str):
-        if scan_id is None:
-            return {"error": True, "message": "Invalid scan_id"}
-        elif type(scan_id) is not str:
-            return {"error": True, "message": "scan_id is not of type str"}
-        try:
-            scan = self._active_scans.get(scan_id)
-            if scan is None:
-                return {"status": 200, "message": f"Scan with {scan_id} was not found"}
-            else:
-                return {"status": 200, "message": "success", "data": scan}
-        except Exception as e:
-            # log
-            print(e)  # Something unexpected happened here
-            return {"error": True, "message": "Internal Server Error"}
-
-    def generate_unique_session(self) -> str:
-        if len(self._active_scans) == 0:
-            return utilities.generate_random_uuid()
-        _session = utilities.generate_random_uuid()
-        while self._active_scans.get(_session):
-            _session = utilities.generate_random_uuid()
-        return _session
 
     @staticmethod
     def generate_random_config() -> dict:

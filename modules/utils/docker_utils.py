@@ -40,7 +40,6 @@ def start_automatic_zap_service(config: dict) -> Container:
          f"/tmp/{config['session_name']}", "-config",
          "api.addrs.addr.name=.*", "-config", "api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}"],
         volumes={f"{_zap_path}\\{config['session_name']}": {"bind": f"/tmp/{config['session_name']}", "mode": "rw"}},
-        # TODO: Change path to ENV
         ports={f"{config['port']}/tcp": config["port"]},
         detach=True
     )

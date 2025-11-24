@@ -7,13 +7,14 @@ import aiofiles
 
 from modules.analytics.vulnerability_analysis import analyze_results
 from modules.db.database import Database
-from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType
+from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.utils.__utils__ import check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
+from services.ScanTracker import ScanTracker
 
 
-async def run_scheduled_scan(scanner_manager, url, database: Database):
+async def run_scheduled_scan(scanner_manager, scan_tracker: ScanTracker, url, database: Database):
     # Init
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
@@ -21,13 +22,14 @@ async def run_scheduled_scan(scanner_manager, url, database: Database):
     time_start = time.perf_counter()
     _scan_start = datetime.now()
     _URL = check_url_local_test(str(url))
-    session = scanner_manager.generate_unique_session()
+    session = scan_tracker.generate_unique_session()
     zap_config = scanner_manager.generate_random_config()
     wapiti_config = _wapiti_scanner.generate_config(
         {
             "modules": ["all"]
         }
     )
+    scan_tracker.add_scan(session, _URL, ScanStep.INIT)
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
         run_start_scan,
@@ -51,12 +53,14 @@ async def run_scheduled_scan(scanner_manager, url, database: Database):
     )
 
     # Analytics
+    scan_tracker.advance_step(session, ScanStep.ANALYZING)
     _results = analyze_results(session, wapiti_result, zap_result)
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start
 
     # DB write
+    scan_tracker.advance_step(session, ScanStep.SAVING)
     if query_result.__contains__("error"):
         f = await aiofiles.open(f"{full_scan_path}\\{session}.json", "w")
         await f.write(json.dumps(

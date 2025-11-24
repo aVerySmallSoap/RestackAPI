@@ -43,7 +43,7 @@ class ScheduleManager:
                 )
             return _returnable
 
-    def initialize_apscheduler_jobs(self, scanner_manager, database) -> AsyncIOScheduler:
+    def initialize_apscheduler_jobs(self, scanner_manager, scan_tracker, database) -> AsyncIOScheduler:
         logger.debug("Initializing scheduled jobs")
         _schedules = self._fetch_schedules_from_db()
         if _schedules is None or len(_schedules) == 0:
@@ -66,7 +66,7 @@ class ScheduleManager:
                     trigger=new_trigger,
                     id=job_id,
                     name=schedule["name"],
-                    args=[scanner_manager, schedule["url"], database],
+                    args=[scanner_manager, scan_tracker, schedule["url"], database],
                 )
             else:
                 # Job exists
@@ -76,7 +76,7 @@ class ScheduleManager:
                         run_scheduled_scan,
                         trigger=new_trigger,
                         id=job_id,
-                        args=[scanner_manager, schedule["url"], database],
+                        args=[scanner_manager, scan_tracker, schedule["url"], database],
                         replace_existing=True,
                     )
                 else:

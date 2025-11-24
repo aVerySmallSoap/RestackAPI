@@ -9,12 +9,13 @@ from zapv2 import ZAPv2
 
 import modules.utils.docker_utils as docker_utilities
 from modules.interfaces.IScannerAdapter import IScannerAdapter
-from modules.interfaces.enums.restack_enums import ZAPScanType
+from modules.interfaces.enums.restack_enums import ZAPScanType, ScanStep
 from modules.utils.load_configs import DEV_ENV
+from modules.utils.preinstances import scan_tracker
 
 
 class ZapScanner(IScannerAdapter):
-    _base_zap_path = f"{DEV_ENV['report_paths']['zap']}"
+    _base_zap_path = DEV_ENV['report_paths']['zap']
     _timeout = 300
 
     @logger.catch
@@ -35,7 +36,7 @@ class ZapScanner(IScannerAdapter):
                 response = requests.get(f"http://localhost:{config.get('port')}/JSON/core/view/version/",
                                         params={"apikey": config.get("api_key")}, timeout=30)
                 if response.status_code == 200:
-                    logger.info("Zap API was found and is ready! Version {version}", response.json().get("version"))
+                    logger.info("Zap API was found and is ready! Version {}", response.json().get("version"))
                     break
             except requests.exceptions.ConnectionError:
                 logger.debug("Zap API is not responding, we will try again...")
@@ -121,6 +122,7 @@ class ZapScanner(IScannerAdapter):
     @logger.catch
     def parse_results(self, **config) -> dict:
         logger.info(f"Parsing results for {config.get('session')}")
+        scan_tracker.advance_step(config.get("session"), ScanStep.PARSING)
         try:
             _har_alerts = self._fetch_header_and_request_alerts(config.get("zap_instance"),
                                                                 session=config.get("session"))
@@ -228,6 +230,7 @@ class ZapScanner(IScannerAdapter):
     @logger.catch
     def start_active_scan(self, zap: ZAPv2, **config):
         self._context_lookup(zap, url=config.get("url"))
+        logger.info("Starting a zap scan in the active mode...")
         try:
             scan_id = zap.ascan.scan(config.get("url"), recurse=True)
             while int(zap.ascan.status(scan_id)) < 100:

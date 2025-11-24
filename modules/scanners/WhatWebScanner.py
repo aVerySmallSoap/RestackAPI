@@ -100,7 +100,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
         client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "--verbose", "--log-json", f"./reports/{session}.json", url],
+                              ["./whatweb", "-a", "1", "--verbose", "--log-json", f"./reports/{session}.json", url],
                               volumes={
                                   DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
                               auto_remove=True)

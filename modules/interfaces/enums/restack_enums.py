@@ -35,3 +35,19 @@ class ZAPScanType(Enum):
     FULL = 3
     API = 4
     AUTOMATIC = 5
+
+class ScanStep(Enum):
+    INIT        = "Initializing"
+    SCANNING    = "Scanning"
+    ZAP         = "ZAP Scanning"
+    WAPITI      = "Wapiti Scanning"
+    WHATWEB     = "WhatWeb Scanning"
+    QUERYVULNS  = "Querying Search_vulns"
+    PARSING     = "Parsing"
+    ANALYZING   = "Analyzing"
+    GENERATE    = "Generating report"
+    SAVING      = "Saving"
+    CLEANUP     = "Cleaning"
+    SUCCESS     = "Success"
+    FAILED      = "Failed"
+    ERROR       = "Error"
