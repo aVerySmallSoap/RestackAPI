@@ -17,7 +17,8 @@ from modules.db.database import Database
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
-from modules.utils.__utils__ import check_directories, check_url_local_test, run_start_scan
+from modules.utils.__utils__ import check_directories, check_url_local_test, run_start_scan, \
+    send_scan_tracking_heartbeat
 from modules.utils.load_configs import DEV_ENV
 from services.FileReportGenerator import generate_excel, generate_pdf
 from modules.utils.preinstances import scan_tracker
@@ -407,10 +408,19 @@ async def add_schedule(job: ScheduleRequest):
 @app.websocket("/api/v1/ws/scans/poll")
 async def poll_scans(websocket: WebSocket):
     await connection_manager.connect(websocket)
-    heartbeat_task = asyncio.create_task(scan_tracker.send_scan_tracking_heartbeat(websocket))
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        connection_manager.disconnect(websocket)
-        heartbeat_task.cancel()
+    heartbeat = asyncio.create_task(send_scan_tracking_heartbeat(websocket))
+    while True:
+        try:
+            # await websocket.send_json(heartbeat)
+            pass
+        except WebSocketDisconnect:
+            break
+
+@app.post("/test/tracker")
+async def add_track(session:str):
+    scan_tracker.add_scan(session, "http://localhost:2000", ScanStep.INIT)
+    return {"data": scan_tracker.fetch_all_scans()}
+
+@app.post("/test/tracker/fetch")
+async def fetch():
+    return {"data": scan_tracker.fetch_all_scans()}

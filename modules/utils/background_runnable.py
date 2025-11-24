@@ -11,10 +11,10 @@ from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, Sca
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.utils.__utils__ import check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
-from services.ScanTracker import ScanTracker
+from modules.utils.preinstances import scan_tracker
 
 
-async def run_scheduled_scan(scanner_manager, scan_tracker: ScanTracker, url, database: Database):
+async def run_scheduled_scan(scanner_manager, url, database: Database):
     # Init
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]

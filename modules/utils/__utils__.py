@@ -1,9 +1,16 @@
 import asyncio
+import json
 import os
 import socket
 import uuid
 
+import aiofiles
+import anyio
+
+from modules.utils.load_configs import DEV_ENV
+from modules.utils.preinstances import scan_tracker
 from services.managers.ScannerManager import ScannerManager
+from fastapi import WebSocket, WebSocketDisconnect
 
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
@@ -102,3 +109,23 @@ def run_start_scan(instance: ScannerManager, url: str, session: str, **config):
     Run the async start_scan from ScannerManager in a coroutine.
     """
     return asyncio.run(instance.start_scan(url, session, **config))
+
+async def send_scan_tracking_heartbeat(websocket: WebSocket):
+    while True:
+        await asyncio.sleep(5)
+        async with aiofiles.open(DEV_ENV["templates_path"]["active_scans"], "r") as scans:
+            data = await json.load(scans)
+            print("Sending a beat...")
+            try:
+                if os.stat(DEV_ENV["templates_path"]["active_scans"]).st_size == 0:
+                    return websocket.send_text("test")
+                else:
+                    return websocket.send_json(data)
+            except json.decoder.JSONDecodeError:
+                return websocket.send_text("test")
+                # return {"message": "Internal Server error"}
+            except Exception:
+                return websocket.send_text("test")
+                # return {"message": "No active scans"}
+
+

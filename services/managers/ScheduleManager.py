@@ -66,7 +66,7 @@ class ScheduleManager:
                     trigger=new_trigger,
                     id=job_id,
                     name=schedule["name"],
-                    args=[scanner_manager, scan_tracker, schedule["url"], database],
+                    args=[scanner_manager, schedule["url"], database],
                 )
             else:
                 # Job exists
@@ -76,7 +76,7 @@ class ScheduleManager:
                         run_scheduled_scan,
                         trigger=new_trigger,
                         id=job_id,
-                        args=[scanner_manager, scan_tracker, schedule["url"], database],
+                        args=[scanner_manager, schedule["url"], database],
                         replace_existing=True,
                     )
                 else:

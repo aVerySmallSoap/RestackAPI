@@ -1,6 +1,7 @@
 {
   "templates_path": {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\config\\templates\\wapiti_config.json",
+    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\templates\\wapiti_config.json",
+    "active_scans": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\templates\\active_scan.json",
     "whatweb": "",
     "zap": ""
   },
