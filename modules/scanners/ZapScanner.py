@@ -339,7 +339,8 @@ class ZapScanner(IScannerAdapter):
                             if len(_returnable) == 0 or har.get("id") not in _returnable:
                                 _returnable[har.get("id")] = har
                             else:
-                                _returnable.get(har.get("id")).append(har)
+                                listed = _returnable.get(har.get("id"))
+                                listed.append(har)
                     return _returnable
                 except Exception as e:
                     logger.error("Something happened!\n{}", e)

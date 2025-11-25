@@ -341,17 +341,11 @@ async def scan(request: ScanRequest) -> dict:
                 "ai": ai_summary
         }
     }
-    with open(f"{DEV_ENV['report_paths']['full_scan']}\\{session}.json", "w+") as writable:
-        writable.write(json.dumps(data))
-        writable.flush()
-        writable.close()
 
     # Save report in disk
     scan_tracker.advance_step(session, ScanStep.SAVING)
     f = await aiofiles.open(f"{full_scan_path}\\{session}.json", "w")
-    await f.write(json.dumps(
-        {"data": _results, "plugins": {"fingerprinted": raw_whatweb_result, "patchable": query_result},
-         "scan_time": scan_time}, indent=4))
+    await f.write(json.dumps(data, indent=4))
     await f.close()
 
     # DB write
