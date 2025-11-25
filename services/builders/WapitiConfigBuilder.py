@@ -10,7 +10,7 @@ from modules.utils.load_configs import DEV_ENV
 class WapitiConfigBuilder(IConfigBuilder):
     _wapiti_base_path = DEV_ENV["report_paths"]["wapiti"]
     _args: list[str] = ["-u", "-m", "-o", "-S", "--max-scan-time", "--tasks"]
-    _commands: list[str] = ["wapiti", "-v", "0", "-f", "json", "-l", "2", "--headless", "hidden", "--flush-session"]
+    _commands: list[str] = ["wapiti", "-v", "2", "-f", "json", "-l", "2", "--headless", "hidden", "--flush-session"]
 
     # == Configurable ==
     _url: Optional[str] = None  # Flag: -u !!REQUIRED

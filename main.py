@@ -12,7 +12,8 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel, AnyUrl
 
-from modules.analytics.vulnerability_analysis import analyze_results
+from modules.analytics.ai_recosum import summarize_with_ai
+from modules.analytics.vulnerability_analysis import analyze_results, generate_summary_stats, create_priority_matrix
 from modules.db.database import Database
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
@@ -320,6 +321,9 @@ async def scan(request: ScanRequest) -> dict:
     # Analytics
     scan_tracker.advance_step(session, ScanStep.ANALYZING)
     _results = analyze_results(session, wapiti_result, zap_result)
+    summary_stats = generate_summary_stats(_results)
+    priority_matrix = create_priority_matrix(_results)
+    ai_summary = summarize_with_ai(session)
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start
@@ -346,6 +350,11 @@ async def scan(request: ScanRequest) -> dict:
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": _results,
+            "summary": {
+                "stats": summary_stats,
+                "matrix": priority_matrix,
+                "ai": ai_summary
+            },
             "plugins": {
                 "fingerprinted": raw_whatweb_result,
                 "patchable": query_result["message"]
@@ -365,6 +374,11 @@ async def scan(request: ScanRequest) -> dict:
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": _results,
+            "summary": {
+                "stats": summary_stats,
+                "matrix": priority_matrix,
+                "ai": ai_summary
+            },
             "plugins": {
                 "fingerprinted": raw_whatweb_result,
                 "patchable": query_result

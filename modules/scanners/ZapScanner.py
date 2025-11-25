@@ -16,7 +16,7 @@ from modules.utils.preinstances import scan_tracker
 
 class ZapScanner(IScannerAdapter):
     _base_zap_path = DEV_ENV['report_paths']['zap']
-    _timeout = 300
+    _timeout = 10_000
 
     @logger.catch
     def start_scan(self, config: dict, **kwargs):
@@ -59,6 +59,7 @@ class ZapScanner(IScannerAdapter):
         else:
             zap = config.get("zap_instance")
 
+        self._context_lookup(zap, url=config.get("url"))
         try:
             match config["scan_type"]:
                 case ZAPScanType.PASSIVE:
@@ -100,6 +101,8 @@ class ZapScanner(IScannerAdapter):
                     raise TypeError  # There is no valid argumentor match that was passed here
             _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
             logger.info("Zap scan completed successfully.")
+            logger.debug("Waiting 10 seconds before starting a cleanup...")
+            time.sleep(10)
             logger.debug("Cleaning up containers and associated directories...")
             container.stop()
             container.remove()
@@ -209,7 +212,6 @@ class ZapScanner(IScannerAdapter):
 
     @logger.catch
     def start_passive_scan(self, zap: ZAPv2, **config):
-        self._context_lookup(zap, url=config.get("url"))
         logger.info("Starting a zap scan in the passive mode...")
         try:
             while int(zap.pscan.records_to_scan) > 0:
@@ -229,7 +231,6 @@ class ZapScanner(IScannerAdapter):
 
     @logger.catch
     def start_active_scan(self, zap: ZAPv2, **config):
-        self._context_lookup(zap, url=config.get("url"))
         logger.info("Starting a zap scan in the active mode...")
         try:
             scan_id = zap.ascan.scan(config.get("url"), recurse=True)
@@ -313,33 +314,35 @@ class ZapScanner(IScannerAdapter):
     @logger.catch
     def _fetch_header_and_request_alerts(self, zap: ZAPv2, **config) -> dict:
         logger.info("Fetching headers and request alerts...")
-        with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
-            report = json.load(f)
-            message_ids: str = ""
-            for alert in report:
-                message_ids += str(alert.get("sourceMessageId")) + ","
-            message_ids.removesuffix(",")  # remove trailing comma
-            try:
-                messages = zap.core.messages_by_id(message_ids)
-                _returnable: dict
-                if len(messages) > 0 and type(messages) is not str:
-                    _har_list: list
-                    for message in messages:
-                        har = {
-                            "id": message.get("id"),
-                            "requestBody": message.get("requestBody"),
-                            "requestHeader": message.get("requestHeader"),
-                            "responseBody": message.get("responseBody"),
-                            "responseHeader": message.get("responseHeader")
-                        }
-                        _har_list.append(har)
-                    for har in _har_list:
-                        if len(_returnable) == 0 or har.get("id") not in _returnable:
-                            _returnable[har.get("id")] = har
-                        else:
-                            _returnable.get(har.get("id")).append(har)
-                return _returnable
-            except Exception:
-                # log
-                pass
+        try:
+            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
+                report = json.load(f)
+                message_ids: str = ""
+                for alert in report:
+                    message_ids += str(alert.get("sourceMessageId")) + ","
+                message_ids.removesuffix(",")  # remove trailing comma
+                try:
+                    messages = zap.core.messages_by_id(message_ids)
+                    _returnable: dict
+                    if len(messages) > 0 and type(messages) is not str:
+                        _har_list: list
+                        for message in messages:
+                            har = {
+                                "id": message.get("id"),
+                                "requestBody": message.get("requestBody"),
+                                "requestHeader": message.get("requestHeader"),
+                                "responseBody": message.get("responseBody"),
+                                "responseHeader": message.get("responseHeader")
+                            }
+                            _har_list.append(har)
+                        for har in _har_list:
+                            if len(_returnable) == 0 or har.get("id") not in _returnable:
+                                _returnable[har.get("id")] = har
+                            else:
+                                _returnable.get(har.get("id")).append(har)
+                    return _returnable
+                except Exception as e:
+                    logger.error("Something happened!\n{}", e)
+        except Exception as e:
+            logger.error("Something happened!\n{}", e)
         return {}
