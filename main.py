@@ -17,8 +17,7 @@ from modules.db.database import Database
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
-from modules.utils.__utils__ import check_directories, check_url_local_test, run_start_scan, \
-    send_scan_tracking_heartbeat
+from modules.utils.__utils__ import check_directories, check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
 from services.FileReportGenerator import generate_excel, generate_pdf
 from modules.utils.preinstances import scan_tracker
@@ -48,8 +47,6 @@ async def lifespan(api: FastAPI):
     scheduler = _schedule_manager.initialize_apscheduler_jobs(_scanner_manager, scan_tracker, _db)
     scheduler.start()
     api.state.scheduler = scheduler
-    for schedule in scheduler.get_jobs():
-        print(f"Name: {schedule.name}\ntrigger: {schedule.trigger}\n next run in: {schedule.next_run_time}\n")
     yield
     if scheduler.running:
         scheduler.shutdown()
@@ -117,6 +114,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": result,
             "plugins": {
@@ -133,6 +131,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": result,
             "plugins": {
@@ -183,6 +182,7 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": zap_result,
             "plugins": {
@@ -199,6 +199,7 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": zap_result,
             "plugins": {
@@ -243,6 +244,7 @@ async def zap_active_scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": zap_result,
             "plugins": {
@@ -259,6 +261,7 @@ async def zap_active_scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": zap_result,
             "plugins": {
@@ -340,6 +343,7 @@ async def scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": _results,
             "plugins": {
@@ -358,6 +362,7 @@ async def scan(request: ScanRequest) -> dict:
             scan_time,
             _URL
         )
+        scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
             "data": _results,
             "plugins": {
@@ -408,13 +413,28 @@ async def add_schedule(job: ScheduleRequest):
 @app.websocket("/api/v1/ws/scans/poll")
 async def poll_scans(websocket: WebSocket):
     await connection_manager.connect(websocket)
-    heartbeat = asyncio.create_task(send_scan_tracking_heartbeat(websocket))
-    while True:
-        try:
-            # await websocket.send_json(heartbeat)
-            pass
-        except WebSocketDisconnect:
-            break
+    try:
+        while True:
+            await asyncio.sleep(5)
+            try:
+                async with aiofiles.open(DEV_ENV["templates_path"]["active_scans"], "r") as f:
+                    content = await f.read()
+                    if not content or content.strip() == "":
+                        await websocket.send_json({"message": "No active scans"})
+                        continue
+                    data = json.loads(content)
+                    await websocket.send_json(data)
+            except json.JSONDecodeError:
+                await websocket.send_json({"error": "Invalid JSON in active scans file"})
+            except FileNotFoundError:
+                await websocket.send_json({"error": "Active scans file not found"})
+            except Exception as e:
+                logger.error(f"Error reading active scans: {e}")
+                await websocket.send_json({"error": "Internal server error"})
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
+    finally:
+        connection_manager.disconnect(websocket)
 
 @app.post("/test/tracker")
 async def add_track(session:str):

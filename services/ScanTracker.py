@@ -10,8 +10,7 @@ class ScanTracker:
     _ACTIVE_SCAN_PATH = DEV_ENV["templates_path"]["active_scans"]
 
     def add_scan(self, session:str, target:str, step:ScanStep):
-        with open(self._ACTIVE_SCAN_PATH, "r"):
-            active_scans = self.check_if_invalid_or_empty()
+        active_scans = self.check_if_invalid_or_empty()
 
         with open(self._ACTIVE_SCAN_PATH, "w") as scans:
             active_scans[session] = {
@@ -24,32 +23,31 @@ class ScanTracker:
 
 
     def remove_scan(self, session:str):
-        with open(self._ACTIVE_SCAN_PATH, "r"):
-            active_scans = self.check_if_invalid_or_empty()
+        active_scans = self.check_if_invalid_or_empty()
 
         with open(self._ACTIVE_SCAN_PATH, "w") as scans:
             active_scans.pop(session)
             json.dump(active_scans, scans)
 
     def fetch_scan(self, session:str) -> dict:
-        with open(self._ACTIVE_SCAN_PATH, "r"):
-            active_scans = self.check_if_invalid_or_empty()
-            return active_scans.get(session)
+        active_scans = self.check_if_invalid_or_empty()
+        return active_scans.get(session)
 
     def fetch_all_scans(self) -> dict:
-        with open(self._ACTIVE_SCAN_PATH, "r"):
-            active_scans = self.check_if_invalid_or_empty()
-            if len(active_scans) == 0:
-                return {"message": "There are no scans"}
-            return active_scans
+        active_scans = self.check_if_invalid_or_empty()
+        if len(active_scans) == 0:
+            return {"message": "There are no scans"}
+        return active_scans
 
     def advance_step(self, session:str, step:ScanStep):
         """
         Changes what step the tracked scan is in.
         """
-        with open(self._ACTIVE_SCAN_PATH, "r"):
-            active_scans = self.check_if_invalid_or_empty()
-            active_scans[session]["step"] = step
+        active_scans = self.check_if_invalid_or_empty()
+
+        with open(self._ACTIVE_SCAN_PATH, "w") as scans:
+            active_scans[session]["step"] = step.value
+            json.dump(active_scans, scans)
 
     def generate_unique_session(self) -> str:
         with open(self._ACTIVE_SCAN_PATH, "r"):

@@ -1,7 +1,1 @@
-{
-  "4726f679-4f63-44f2-9859-5043da483ea6": {
-    "session": "4726f679-4f63-44f2-9859-5043da483ea6",
-    "target": "https://boardeasy.net/",
-    "step": "Initializing"
-  }
-}
+{"5474369f-3b3e-46fe-ad06-9289744d0e37": {"session": "5474369f-3b3e-46fe-ad06-9289744d0e37", "target": "http://boardeasy.net/", "step": "Analyzing"}, "e660f5ea-def9-4622-b5a5-723361248579": {"session": "e660f5ea-def9-4622-b5a5-723361248579", "target": "http://boardeasy.net/", "step": "Saving"}, "8ca99e9e-9af5-41f1-b405-bcc36c2a246c": {"session": "8ca99e9e-9af5-41f1-b405-bcc36c2a246c", "target": "http://boardeasy.net/", "step": "Saving"}, "de7d9c25-570b-424f-a57d-387477a14aa2": {"session": "de7d9c25-570b-424f-a57d-387477a14aa2", "target": "http://boardeasy.net/", "step": "Saving"}, "ad354e72-6218-497a-a182-974e32b4a3cb": {"session": "ad354e72-6218-497a-a182-974e32b4a3cb", "target": "http://boardeasy.net/", "step": "Saving"}, "345841ee-4785-46de-9ff1-f9ec8c40d79b": {"session": "345841ee-4785-46de-9ff1-f9ec8c40d79b", "target": "http://boardeasy.net/", "step": "Saving"}, "fa5a94ce-a9d9-47c5-82cb-453fd75bcb9a": {"session": "fa5a94ce-a9d9-47c5-82cb-453fd75bcb9a", "target": "http://boardeasy.net/", "step": "Saving"}, "729d944b-7c75-4aa0-a89e-54694b81ed41": {"session": "729d944b-7c75-4aa0-a89e-54694b81ed41", "target": "http://boardeasy.net/", "step": "Saving"}, "adf3e219-9fbf-4830-b97e-7583dcc59deb": {"session": "adf3e219-9fbf-4830-b97e-7583dcc59deb", "target": "http://example.com/", "step": "Saving"}, "d9c45acb-13fe-47f8-920c-dbb575020385": {"session": "d9c45acb-13fe-47f8-920c-dbb575020385", "target": "http://boardeasy.net/", "step": "Saving"}}
