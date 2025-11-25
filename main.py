@@ -323,10 +323,28 @@ async def scan(request: ScanRequest) -> dict:
 
     # Analytics
     scan_tracker.advance_step(session, ScanStep.ANALYZING)
-    _results = analyze_results(session, wapiti_result, zap_result, raw_whatweb_result, query_result. scan_time)
+    _results = analyze_results(session, wapiti_result, zap_result)
     summary_stats = generate_summary_stats(_results)
     priority_matrix = create_priority_matrix(_results)
     ai_summary = summarize_with_ai(session)
+
+    data = {
+        "data": _results,
+        "plugins": {
+            "fingerprinted": raw_whatweb_result,
+            "patchable": query_result
+        },
+        "scan_time": scan_time,
+        "summary": {
+                "stats": summary_stats,
+                "matrix": priority_matrix,
+                "ai": ai_summary
+        }
+    }
+    with open(f"{DEV_ENV['report_paths']['full_scan']}\\{session}.json", "w+") as writable:
+        writable.write(json.dumps(data))
+        writable.flush()
+        writable.close()
 
 
 

@@ -10,7 +10,7 @@ def summarize_with_ai(session: str) -> dict:
     ai_client = genai.Client(api_key=DEV_ENV["api_keys"]["gemini"])
     with open(f"{DEV_ENV['report_paths']['full_scan']}\\{session}.json", "r") as f:
         report = json.load(f)
-        _data = {"union": report["union"], "intersection": report["intersection"],"rules": report["rules"]}
+        _data = {"union": report["data"]["union"], "intersection": report["data"]["intersection"],"rules": report["data"]["rules"]}
         _tech = {"fingerprinted": report["plugins"]["fingerprinted"], "patchable": report["plugins"]["patchable"]}
 
         vuln_response = ai_client.models.generate_content(
