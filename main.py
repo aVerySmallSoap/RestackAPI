@@ -318,15 +318,17 @@ async def scan(request: ScanRequest) -> dict:
         scanner_instance=_wapiti_scanner
     )
 
+    time_end = time.perf_counter()
+    scan_time = time_end - time_start
+
     # Analytics
     scan_tracker.advance_step(session, ScanStep.ANALYZING)
-    _results = analyze_results(session, wapiti_result, zap_result)
+    _results = analyze_results(session, wapiti_result, zap_result, raw_whatweb_result, query_result. scan_time)
     summary_stats = generate_summary_stats(_results)
     priority_matrix = create_priority_matrix(_results)
     ai_summary = summarize_with_ai(session)
 
-    time_end = time.perf_counter()
-    scan_time = time_end - time_start
+
 
     # Save report in disk
     scan_tracker.advance_step(session, ScanStep.SAVING)

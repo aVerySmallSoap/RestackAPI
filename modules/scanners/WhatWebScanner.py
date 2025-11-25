@@ -4,6 +4,7 @@ import time
 
 import aiofiles
 import docker
+from loguru import logger
 
 from modules.interfaces.IAsyncScannerAdapter import IAsyncScannerAdapter
 from modules.utils.load_configs import DEV_ENV
@@ -34,6 +35,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         pass
 
     def parse_results(self, session: str) -> dict:
+        logger.info("parsing whatweb results")
         _excluded = ["UncommonHeaders", "Open-Graph-Protocol", "Title", "Frame", "Script"]
         _trivial = ["Email", "Script", "IP", "Country", "HTTPServer"]
         _versioned_tech = []

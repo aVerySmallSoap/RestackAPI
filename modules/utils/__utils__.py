@@ -1,16 +1,9 @@
 import asyncio
-import json
 import os
 import socket
 import uuid
 
-import aiofiles
-import anyio
-
-from modules.utils.load_configs import DEV_ENV
-from modules.utils.preinstances import scan_tracker
 from services.managers.ScannerManager import ScannerManager
-from fastapi import WebSocket, WebSocketDisconnect
 
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
