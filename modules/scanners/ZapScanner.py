@@ -323,9 +323,9 @@ class ZapScanner(IScannerAdapter):
                 message_ids.removesuffix(",")  # remove trailing comma
                 try:
                     messages = zap.core.messages_by_id(message_ids)
-                    _returnable: dict
+                    _returnable = {}
                     if len(messages) > 0 and type(messages) is not str:
-                        _har_list: list
+                        _har_list: list = []
                         for message in messages:
                             har = {
                                 "id": message.get("id"),
@@ -344,5 +344,5 @@ class ZapScanner(IScannerAdapter):
                 except Exception as e:
                     logger.error("Something happened!\n{}", e)
         except Exception as e:
-            logger.error("Something happened!\n{}", e)
+            logger.error("Something happened outside!\n{}", e)
         return {}
