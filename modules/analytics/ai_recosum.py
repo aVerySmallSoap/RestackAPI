@@ -26,9 +26,9 @@ def summarize_with_ai(session: str) -> dict:
             tech_response = ai_client.models.generate_content(
                 model="gemini-2.5-flash",
                 config=types.GenerateContentConfig(
-                    system_instruction="You are a cybersecurity specialist"
+                    system_instruction="You are a cybersecurity specialist. Ignore if there are empty technology fields"
                 ),
-                contents=["Can you summarize the findings in this report.", "Can you recommend solutions on how to mitigate these problems", json.dumps(_tech)]
+                contents=["Can you summarize the findings in this report.", "If there are problems, can you recommend solutions to mitage them", json.dumps(_tech)]
             )
         except Exception as e:
             logger.error("Something happened!\n{}", e)

@@ -20,3 +20,5 @@ reportlab
 websockets
 gunicorn
 uvicorn[standard]
+statsmodels
+scikit-learn

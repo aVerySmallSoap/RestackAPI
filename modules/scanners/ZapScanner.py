@@ -185,7 +185,7 @@ class ZapScanner(IScannerAdapter):
                             "method": alert.get("method"),
                             "evidence": alert.get("evidence"),
                             "confidence": alert.get("confidence"),
-                            "har": _alert_har.pop(0) if _alert_har is not None else None,
+                            "har": _alert_har,
                             "zapId": alert.get("id")
                         }
                     }
@@ -205,9 +205,8 @@ class ZapScanner(IScannerAdapter):
                     _sarif["runs"][0]["results"].append(_result)
                 logger.info("Parsing finished!")
                 return _sarif
-        except Exception:
-            # log
-            pass
+        except Exception as e:
+            logger.error("Zap parsing failed!\n{}", e)
         return {}
 
     @logger.catch
@@ -321,6 +320,7 @@ class ZapScanner(IScannerAdapter):
                 for alert in report:
                     message_ids += str(alert.get("sourceMessageId")) + ","
                 message_ids.removesuffix(",")  # remove trailing comma
+                logger.debug("Message ids queried")
                 try:
                     messages = zap.core.messages_by_id(message_ids)
                     _returnable = {}
