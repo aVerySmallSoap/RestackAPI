@@ -70,6 +70,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -498,12 +499,73 @@ async def poll_data_timeseries(target: AnyUrl, days: int):
 
 @app.post("/v1/schedule/add")
 async def add_schedule(schedule: ScheduleRequest):
-    _schedule_manager.add_schedule_scan(schedule.name, schedule.job_type, schedule.target.encoded_string(), schedule.interval)
-    return {"message": "job added!"}
+    """Add a new scheduled scan"""
+    try:
+        manager = get_scheduler_service()
+        manager.add_schedule_scan(
+            schedule.name,
+            schedule.job_type,
+            schedule.target.__str__(),
+            schedule.interval
+        )
+        return {"message": "Schedule added successfully"}
+    except Exception as e:
+        logger.error(f"Failed to add schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/v1/schedules/")
 async def get_schedules():
-    with Session(_db.engine) as session:
-        data = session.query(ScheduledScans).all()
-        session.close()
-    return data
+    """Get all scheduled scans"""
+    try:
+        with Session(_db.engine) as session:
+            data = session.query(ScheduledScans).all()
+            return data
+    except Exception as e:
+        logger.error(f"Failed to fetch schedules: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/v1/schedule/{schedule_id}")
+async def update_schedule(schedule_id: str, schedule: ScheduleRequest):
+    """Update an existing scheduled scan"""
+    try:
+        manager = get_scheduler_service()
+        manager.update_schedule(
+            schedule_id,
+            schedule.name,
+            schedule.job_type,
+            schedule.target.__str__(),
+            schedule.interval
+        )
+        return {"message": "Schedule updated successfully"}
+    except Exception as e:
+        logger.error(f"Failed to update schedule {schedule_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/v1/schedule/{schedule_id}")
+async def delete_schedule(schedule_id: str):
+    """Delete a scheduled scan"""
+    try:
+        manager = get_scheduler_service()
+        manager.delete_schedule(schedule_id)
+        return {"message": "Schedule deleted successfully"}
+    except Exception as e:
+        logger.error(f"Failed to delete schedule {schedule_id}: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.delete("/v1/history/{report_id}")
+async def delete_history_report(report_id: str):
+    """Delete a scan history report and its associated vulnerabilities"""
+    try:
+        result = await asyncio.to_thread(_db.delete_report, report_id)
+        if result:
+            return {"message": "Report deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Report not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete report {report_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

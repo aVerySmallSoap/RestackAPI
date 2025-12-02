@@ -8,7 +8,6 @@ import aiofiles
 
 from modules.analytics.vulnerability_analysis import analyze_results
 from modules.db.database import Database
-from modules.db.table_collection import ActiveScan
 from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.utils.__utils__ import check_url_local_test, run_start_scan
@@ -36,12 +35,6 @@ async def run_scheduled_scan(url):
         }
     )
     scan_tracker.add_scan(session_id, _URL, ScanStep.INIT)
-
-    with Session(database.engine) as session:
-        isPresent = session.query(ActiveScan).where(ActiveScan.session_id == session_id).scalar()
-        print(isPresent)
-        if isPresent:
-            return
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
         run_start_scan,
@@ -121,3 +114,4 @@ async def run_scheduled_scan(url):
             scan_time,
             _URL
         )
+    scan_tracker.advance_step(session_id, ScanStep.SUCCESS)

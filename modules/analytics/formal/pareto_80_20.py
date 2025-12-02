@@ -21,6 +21,11 @@ def pareto_vulnerability_analysis():
         ).group_by(Vulnerability.vulnerability_type
                    ).order_by(func.count(Vulnerability.id).desc()).all()
 
+        # sample = session.query(
+        #     Vulnerability.vulnerability_type,
+        #     func.count(Vulnerability.id).label('count')
+        # ).filter(Vulnerability.report_id == report_id)
+
         total_vulns = sum(count for _, count in vuln_types)
 
         # Calculate cumulative percentage
