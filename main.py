@@ -5,10 +5,10 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from sqlalchemy.orm import Session
-
+from urllib.parse import urlparse
 
 import aiofiles
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
@@ -17,11 +17,14 @@ from pydantic import BaseModel, AnyUrl
 from modules.analytics.ai_recosum import summarize_with_ai
 from modules.analytics.formal.ARIMMA import arima_vulnerability_forecast
 from modules.analytics.formal.pareto_80_20 import pareto_vulnerability_analysis
+from modules.analytics.formal.correlation_regression import vulnerability_correlation_analysis, \
+    regression_vulnerability_prediction
+from modules.analytics.formal.probability_fitting_distribution import vulnerability_distribution_analysis
 from modules.analytics.informal.activity_summary import get_scan_activity_summary
 from modules.analytics.informal.time_series import calculate_time_series
 from modules.analytics.vulnerability_analysis import analyze_results, generate_summary_stats, create_priority_matrix
 from modules.db.database import Database
-from modules.db.table_collection import ScheduledScans
+from modules.db.table_collection import ScheduledScans, Scan
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
@@ -59,6 +62,7 @@ async def lifespan(api: FastAPI):
     if scheduler.running:
         scheduler.shutdown()
 
+
 def get_scheduler_service():
     if _schedule_manager is None:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -77,6 +81,7 @@ app.add_middleware(
 class ScanRequest(BaseModel):
     url: AnyUrl
     config: dict | None = None
+
 
 class ScheduleRequest(BaseModel):
     name: str
@@ -349,9 +354,9 @@ async def scan(request: ScanRequest) -> dict:
         },
         "scan_time": scan_time,
         "summary": {
-                "stats": summary_stats,
-                "matrix": priority_matrix,
-                "ai": ai_summary
+            "stats": summary_stats,
+            "matrix": priority_matrix,
+            "ai": ai_summary
         }
     }
 
@@ -445,9 +450,11 @@ async def export_pdf(report_id: str):
         media_type="application/pdf"
     )
 
+
 @app.post("/api/v1/schedule/add/")
 async def add_schedule(job: ScheduleRequest):
     pass
+
 
 @app.websocket("/api/v1/ws/scans/poll")
 async def poll_scans(websocket: WebSocket):
@@ -472,30 +479,112 @@ async def poll_scans(websocket: WebSocket):
     finally:
         connection_manager.disconnect(websocket)
 
+
 @app.post("/test/tracker")
-async def add_track(session:str):
+async def add_track(session: str):
     scan_tracker.add_scan(session, "http://localhost:2000", ScanStep.INIT)
     return {"data": scan_tracker.fetch_all_scans()}
+
 
 @app.post("/test/tracker/fetch")
 async def fetch():
     return {"data": scan_tracker.fetch_all_scans()}
 
+
 @app.get("/test/poll/data/summary/{days}")
-async def poll_data_summary(days: int):
-    return get_scan_activity_summary(days)
+async def poll_data_summary(
+    days: int,
+    target: str = Query(None, description="Filter by target domain")
+):
+    # Pass the target to the function
+    return get_scan_activity_summary(days, target_domain=target)
+
 
 @app.get("/test/poll/data/pareto")
-async def poll_data_pareto():
-    return pareto_vulnerability_analysis()
+async def poll_data_pareto(target: str = Query(None, description="Filter by target domain")):
+    """Get Pareto analysis of vulnerabilities, optionally filtered by domain"""
+    try:
+        return pareto_vulnerability_analysis(target_domain=target)
+    except Exception as e:
+        logger.error(f"Failed to generate Pareto analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/test/poll/data/arrima")
 async def poll_data_arrima(target: AnyUrl, forecast_days: int):
     return arima_vulnerability_forecast(target.host, forecast_days)
 
+
 @app.get("/test/poll/data/timeseries/{target}")
 async def poll_data_timeseries(target: AnyUrl, days: int):
     return calculate_time_series(target.host, days)
+
+
+@app.get("/test/poll/data/correlation")
+async def poll_data_correlation(target: str = Query(None, description="Filter by target domain")):
+    """Get correlation analysis, optionally filtered by domain"""
+    try:
+        return vulnerability_correlation_analysis(target_domain=target)
+    except Exception as e:
+        logger.error(f"Failed to generate correlation analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/test/poll/data/distribution")
+async def poll_data_distribution(
+        report_id: str = Query(None, description="Filter by specific report ID"),
+        target: str = Query(None, description="Filter by target domain")
+):
+    """Get distribution analysis, optionally filtered by report or domain"""
+    try:
+        return vulnerability_distribution_analysis(report_id=report_id, target_domain=target)
+    except Exception as e:
+        logger.error(f"Failed to generate distribution analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/test/poll/data/regression")
+async def poll_data_regression(target: str = Query(None, description="Filter by target domain")):
+    """Get regression prediction model, optionally filtered by domain"""
+    try:
+        return regression_vulnerability_prediction(target_domain=target)
+    except Exception as e:
+        logger.error(f"Failed to generate regression analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/analytics/targets")
+async def get_analytics_targets():
+    """Get list of all unique target domains from scans"""
+    try:
+        with Session(_db.engine) as session:
+            # Get all unique target URLs
+            target_urls = session.query(Scan.target_url).distinct().all()
+
+            # Extract domains from URLs
+            domains = set()
+            for url_tuple in target_urls:
+                url = url_tuple[0]
+                try:
+                    parsed = urlparse(url)
+                    # Get netloc (hostname with port if present)
+                    domain = parsed.netloc or parsed.path.split('/')[0]
+                    # Remove port if present
+                    domain = domain.split(':')[0]
+                    if domain:
+                        domains.add(domain)
+                except Exception as e:
+                    logger.warning(f"Failed to parse URL {url}: {e}")
+                    continue
+
+            return {
+                "domains": sorted(list(domains)),
+                "count": len(domains)
+            }
+    except Exception as e:
+        logger.error(f"Failed to fetch analytics targets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/v1/schedule/add")
 async def add_schedule(schedule: ScheduleRequest):
@@ -554,6 +643,7 @@ async def delete_schedule(schedule_id: str):
     except Exception as e:
         logger.error(f"Failed to delete schedule {schedule_id}: {e}")
         raise HTTPException(status_code=404, detail=str(e))
+
 
 @app.delete("/v1/history/{report_id}")
 async def delete_history_report(report_id: str):
