@@ -2,8 +2,10 @@ import asyncio
 import os
 import socket
 import uuid
+from typing import TYPE_CHECKING
 
-from services.managers.ScannerManager import ScannerManager
+if TYPE_CHECKING:
+    from services.managers.ScannerManager import ScannerManager
 
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
@@ -97,7 +99,7 @@ def generate_random_uuid() -> str:
     return str(uuid.uuid4())
 
 
-def run_start_scan(instance: ScannerManager, url: str, session: str, **config):
+def run_start_scan(instance: "ScannerManager", url: str, session: str, **config):
     """
     Run the async start_scan from ScannerManager in a coroutine.
     """

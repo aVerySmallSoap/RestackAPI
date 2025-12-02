@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from loguru import logger
 
-from modules.db.database import Database
 from modules.db.table_collection import ActiveScan
 from modules.interfaces.enums.restack_enums import ScanStep
 import modules.utils.__utils__ as utilities
@@ -12,6 +11,7 @@ import modules.utils.__utils__ as utilities
 
 class ScanTracker:
     def __init__(self):
+        from modules.db.database import Database
         self._db = Database()
 
     def add_scan(self, session_id: str, target: str, step: ScanStep):
