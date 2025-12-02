@@ -92,5 +92,3 @@ def get_scan_activity_summary(days: int = 30):
                 for url, count in top_targets
             ]
         }
-
-pprint.pprint(get_scan_activity_summary(days=30))

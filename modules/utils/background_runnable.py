@@ -12,18 +12,22 @@ from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.utils.__utils__ import check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
 from modules.utils.preinstances import scan_tracker
+from services.managers.ScannerManager import ScannerManager
 
+database = Database()
 
-async def run_scheduled_scan(scanner_manager, url, database: Database):
+async def run_scheduled_scan(url):
     # Init
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
+
+    local_scanner_manager = ScannerManager()
 
     time_start = time.perf_counter()
     _scan_start = datetime.now()
     _URL = check_url_local_test(str(url))
     session = scan_tracker.generate_unique_session()
-    zap_config = scanner_manager.generate_random_config()
+    zap_config = local_scanner_manager.generate_random_config()
     wapiti_config = _wapiti_scanner.generate_config(
         {
             "modules": ["all"]
@@ -33,7 +37,7 @@ async def run_scheduled_scan(scanner_manager, url, database: Database):
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
         run_start_scan,
-        scanner_manager,
+        local_scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.ZAP,
@@ -44,7 +48,7 @@ async def run_scheduled_scan(scanner_manager, url, database: Database):
 
     wapiti_result = await asyncio.to_thread(
         run_start_scan,
-        scanner_manager,
+        local_scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.WAPITI,
@@ -54,7 +58,7 @@ async def run_scheduled_scan(scanner_manager, url, database: Database):
 
     # Analytics
     scan_tracker.advance_step(session, ScanStep.ANALYZING)
-    _results = analyze_results(session, wapiti_result, zap_result)
+    _results = analyze_results(session, wapiti_result, zap_result, raw_whatweb_result, query_result)
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start

@@ -13,7 +13,6 @@ from modules.utils.preinstances import scan_tracker
 
 
 class ScannerManager:
-
     @logger.catch
     async def start_scan(self, url: str, session: str, **config):
         """

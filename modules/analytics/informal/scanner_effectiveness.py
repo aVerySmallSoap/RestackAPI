@@ -1,4 +1,3 @@
-import pprint
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm.session import Session
@@ -87,5 +86,3 @@ def get_scanner_effectiveness(days: int = 30):
             "recommendation": "wapiti" if comparison.get("wapiti", {}).get("total_detections", 0) >
                                           comparison.get("zap", {}).get("total_detections", 0) else "zap"
         }
-
-pprint.pprint(get_scanner_effectiveness())

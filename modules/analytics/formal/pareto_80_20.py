@@ -46,5 +46,3 @@ def pareto_vulnerability_analysis():
             "insight": f"Top {len(pareto_data)} vulnerability types account for 80% of all issues",
             "recommendation": "Focus remediation efforts on these high-impact vulnerability types"
         }
-
-pprint.pprint(pareto_vulnerability_analysis())

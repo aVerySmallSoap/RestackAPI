@@ -4,6 +4,8 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
+from sqlalchemy.orm import Session
+
 
 import aiofiles
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -13,8 +15,13 @@ from loguru import logger
 from pydantic import BaseModel, AnyUrl
 
 from modules.analytics.ai_recosum import summarize_with_ai
+from modules.analytics.formal.ARIMMA import arima_vulnerability_forecast
+from modules.analytics.formal.pareto_80_20 import pareto_vulnerability_analysis
+from modules.analytics.informal.activity_summary import get_scan_activity_summary
+from modules.analytics.informal.time_series import calculate_time_series
 from modules.analytics.vulnerability_analysis import analyze_results, generate_summary_stats, create_priority_matrix
 from modules.db.database import Database
+from modules.db.table_collection import ScheduledScans
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.WhatWebScanner import WhatWebAdapter
@@ -37,20 +44,26 @@ from services.managers.ScheduleManager import ScheduleManager
 
 # Initialize required modules and objects
 _db = Database()
-_schedule_manager = ScheduleManager(_db)
-_scanner_manager = ScannerManager()
+scanner_manager = ScannerManager()
 check_directories()
 logger.add("./logs/{time}.log", rotation="10MB", enqueue=True)
 
 
 @asynccontextmanager
 async def lifespan(api: FastAPI):
-    scheduler = _schedule_manager.initialize_apscheduler_jobs(_scanner_manager, scan_tracker, _db)
+    global _schedule_manager
+    _schedule_manager = ScheduleManager(_db)
+    scheduler = _schedule_manager.initialize_apscheduler_jobs(scan_tracker)
     scheduler.start()
     api.state.scheduler = scheduler
     yield
     if scheduler.running:
         scheduler.shutdown()
+
+def get_scheduler_service():
+    if _schedule_manager is None:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+    return _schedule_manager
 
 
 app = FastAPI(lifespan=lifespan)
@@ -91,7 +104,7 @@ async def wapiti_scan(request: ScanRequest) -> dict:
 
     result = await asyncio.to_thread(
         run_start_scan,
-        _scanner_manager,
+        scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.WAPITI,
@@ -157,12 +170,12 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     session = scan_tracker.generate_unique_session()
     _URL = check_url_local_test(str(request.url))
-    zap_config = _scanner_manager.generate_random_config()
+    zap_config = scanner_manager.generate_random_config()
     scan_tracker.add_scan(session, _URL, ScanStep.INIT)
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
         run_start_scan,
-        _scanner_manager,
+        scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.ZAP,
@@ -219,12 +232,12 @@ async def zap_active_scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     session = scan_tracker.generate_unique_session()
     _URL = check_url_local_test(str(request.url))
-    zap_config = _scanner_manager.generate_random_config()
+    zap_config = scanner_manager.generate_random_config()
     scan_tracker.add_scan(session, _URL, ScanStep.INIT)
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
         run_start_scan,
-        _scanner_manager,
+        scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.ZAP,
@@ -289,7 +302,7 @@ async def scan(request: ScanRequest) -> dict:
     _scan_start = datetime.now()
     _URL = check_url_local_test(str(request.url))
     session = scan_tracker.generate_unique_session()
-    zap_config = _scanner_manager.generate_random_config()
+    zap_config = scanner_manager.generate_random_config()
     wapiti_config = _wapiti_scanner.generate_config(
         {
             "modules": ["all"]
@@ -299,7 +312,7 @@ async def scan(request: ScanRequest) -> dict:
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
         run_start_scan,
-        _scanner_manager,
+        scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.ZAP,
@@ -310,7 +323,7 @@ async def scan(request: ScanRequest) -> dict:
 
     wapiti_result = await asyncio.to_thread(
         run_start_scan,
-        _scanner_manager,
+        scanner_manager,
         _URL,
         session,
         scanner_type=ScannerType.WAPITI,
@@ -470,3 +483,31 @@ async def add_track(session:str):
 @app.post("/test/tracker/fetch")
 async def fetch():
     return {"data": scan_tracker.fetch_all_scans()}
+
+@app.get("/test/poll/data/summary/{days}")
+async def poll_data_summary(days: int):
+    return get_scan_activity_summary(days)
+
+@app.get("/test/poll/data/pareto")
+async def poll_data_pareto():
+    return pareto_vulnerability_analysis()
+
+@app.get("/test/poll/data/arrima")
+async def poll_data_arrima(target: AnyUrl, forecast_days: int):
+    return arima_vulnerability_forecast(target.host, forecast_days)
+
+@app.get("/test/poll/data/timeseries/{target}")
+async def poll_data_timeseries(target: AnyUrl, days: int):
+    return calculate_time_series(target.host, days)
+
+@app.post("/v1/schedule/add")
+async def add_schedule(schedule: ScheduleRequest):
+    _schedule_manager.add_schedule_scan(schedule.name, schedule.job_type, schedule.target.encoded_string(), schedule.interval)
+    return {"message": "job added!"}
+
+@app.get("/v1/schedules/")
+async def get_schedules():
+    with Session(_db.engine) as session:
+        data = session.query(ScheduledScans).all()
+        session.close()
+    return data
