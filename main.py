@@ -53,7 +53,7 @@ logger.add("./logs/{time}.log", rotation="10MB", enqueue=True)
 async def lifespan(api: FastAPI):
     global _schedule_manager
     _schedule_manager = ScheduleManager(_db)
-    scheduler = _schedule_manager.initialize_apscheduler_jobs(scan_tracker)
+    scheduler = _schedule_manager.initialize_apscheduler_jobs()
     scheduler.start()
     api.state.scheduler = scheduler
     yield
