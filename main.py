@@ -454,21 +454,18 @@ async def poll_scans(websocket: WebSocket):
     await connection_manager.connect(websocket)
     try:
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(5)  # Poll database every 5 seconds
             try:
-                async with aiofiles.open(DEV_ENV["templates_path"]["active_scans"], "r") as f:
-                    content = await f.read()
-                    if not content or content.strip() == "":
-                        await websocket.send_json({"message": "No active scans"})
-                        continue
-                    data = json.loads(content)
-                    await websocket.send_json(data)
-            except json.JSONDecodeError:
-                await websocket.send_json({"error": "Invalid JSON in active scans file"})
-            except FileNotFoundError:
-                await websocket.send_json({"error": "Active scans file not found"})
+                # Use asyncio.to_thread because database access is blocking
+                active_scans = await asyncio.to_thread(scan_tracker.fetch_all_scans)
+
+                if not active_scans:
+                    await websocket.send_json({"message": "No active scans"})
+                else:
+                    await websocket.send_json(active_scans)
+
             except Exception as e:
-                logger.error(f"Error reading active scans: {e}")
+                logger.error(f"Error polling active scans: {e}")
                 await websocket.send_json({"error": "Internal server error"})
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")

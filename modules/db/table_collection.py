@@ -73,3 +73,15 @@ class ScheduledScans(Base):
     codename: Mapped[str] = mapped_column(String(), unique=True)
     job_type: Mapped[str] = mapped_column(String())
     configuration: Mapped[JSON] = mapped_column(JSON())
+
+class ActiveScan(Base):
+    """
+    Temporary table to track running scans across multiple Uvicorn workers.
+    Replaces active_scans.json
+    """
+    __tablename__ = "active_scans"
+
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
+    target: Mapped[str] = mapped_column(String)
+    step: Mapped[str] = mapped_column(String)
+    start_time: Mapped[str] = mapped_column(String) # Optional: track when it started

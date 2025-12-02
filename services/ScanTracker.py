@@ -1,71 +1,85 @@
-import json
-import os
+# services/ScanTracker.py
+from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import select, delete
+from loguru import logger
 
-import modules.utils.__utils__ as utilities
+from modules.db.database import Database
+from modules.db.table_collection import ActiveScan
 from modules.interfaces.enums.restack_enums import ScanStep
-from modules.utils.load_configs import DEV_ENV
+import modules.utils.__utils__ as utilities
+
 
 class ScanTracker:
-    # OPTIONAL: WHEN DOING ASYNC PLEASE USE ASYNCIO OR AIO
-    _ACTIVE_SCAN_PATH = DEV_ENV["templates_path"]["active_scans"]
+    def __init__(self):
+        self._db = Database()
 
-    def add_scan(self, session:str, target:str, step:ScanStep):
-        active_scans = self.check_if_invalid_or_empty()
+    def add_scan(self, session_id: str, target: str, step: ScanStep):
+        """Insert a new active scan into the DB"""
+        try:
+            with Session(self._db.engine) as session:
+                new_scan = ActiveScan(
+                    session_id=session_id,
+                    target=target,
+                    step=step.value,
+                    start_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                session.add(new_scan)
+                session.commit()
+                logger.debug(f"Scan {session_id} added to tracker.")
+        except Exception as e:
+            logger.error(f"Failed to add scan to tracker: {e}")
 
-        with open(self._ACTIVE_SCAN_PATH, "w") as scans:
-            active_scans[session] = {
-                "session": session,
-                "target": target,
-                "step": step.value,
-            }
-            json.dump(active_scans, scans)
-        print("Scan was added!")
+    def remove_scan(self, session_id: str):
+        """Remove a scan from the DB (Scan completed or failed)"""
+        try:
+            with Session(self._db.engine) as session:
+                statement = delete(ActiveScan).where(ActiveScan.session_id == session_id)
+                session.execute(statement)
+                session.commit()
+                logger.debug(f"Scan {session_id} removed from tracker.")
+        except Exception as e:
+            logger.error(f"Failed to remove scan from tracker: {e}")
 
-
-    def remove_scan(self, session:str):
-        active_scans = self.check_if_invalid_or_empty()
-
-        with open(self._ACTIVE_SCAN_PATH, "w") as scans:
-            active_scans.pop(session)
-            json.dump(active_scans, scans)
-
-    def fetch_scan(self, session:str) -> dict:
-        active_scans = self.check_if_invalid_or_empty()
-        return active_scans.get(session)
+    def fetch_scan(self, session_id: str) -> dict:
+        with Session(self._db.engine) as session:
+            scan = session.scalar(select(ActiveScan).where(ActiveScan.session_id == session_id))
+            if scan:
+                return {
+                    "session": scan.session_id,
+                    "target": scan.target,
+                    "step": scan.step
+                }
+            return {}
 
     def fetch_all_scans(self) -> dict:
-        active_scans = self.check_if_invalid_or_empty()
-        if len(active_scans) == 0:
-            return {"message": "There are no scans"}
-        return active_scans
+        """Returns a dict format compatible with your frontend"""
+        results = {}
+        with Session(self._db.engine) as session:
+            scans = session.scalars(select(ActiveScan)).all()
+            if not scans:
+                return {}  # Return empty to indicate no scans
 
-    def advance_step(self, session:str, step:ScanStep):
-        """
-        Changes what step the tracked scan is in.
-        """
-        active_scans = self.check_if_invalid_or_empty()
+            for scan in scans:
+                results[scan.session_id] = {
+                    "session": scan.session_id,
+                    "target": scan.target,
+                    "step": scan.step
+                }
+        return results
 
-        with open(self._ACTIVE_SCAN_PATH, "w") as scans:
-            active_scans[session]["step"] = step.value
-            json.dump(active_scans, scans)
+    def advance_step(self, session_id: str, step: ScanStep):
+        """Update the step of a specific scan"""
+        try:
+            with Session(self._db.engine) as session:
+                scan = session.scalar(select(ActiveScan).where(ActiveScan.session_id == session_id))
+                if scan:
+                    scan.step = step.value
+                    session.commit()
+        except Exception as e:
+            logger.error(f"Failed to advance step for {session_id}: {e}")
 
     def generate_unique_session(self) -> str:
-        with open(self._ACTIVE_SCAN_PATH, "r"):
-            active_scans = self.check_if_invalid_or_empty()
-            _session = utilities.generate_random_uuid()
-            if len(active_scans) == 0:
-                return _session
-            while _session in active_scans:
-                _session = utilities.generate_random_uuid()
-            return _session
-
-    def check_if_invalid_or_empty(self) -> dict | None:
-        """ Checks if the file in _ACTIVE_SCAN_PATH exists or is valid json. If not, return an empty dict."""
-        with open(self._ACTIVE_SCAN_PATH, "r") as scans:
-            if os.stat(self._ACTIVE_SCAN_PATH).st_size == 0:
-                return {}
-            else:
-                try:
-                    return json.load(scans)
-                except json.decoder.JSONDecodeError:
-                    return {}
+        # Since we use UUIDs and DB constraints, we can just generate one.
+        # Collisions are mathematically impossible for this scale.
+        return utilities.generate_random_uuid()
