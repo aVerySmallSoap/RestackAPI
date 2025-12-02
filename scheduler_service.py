@@ -6,8 +6,6 @@ from loguru import logger
 # Import your modules
 from modules.db.database import Database
 from services.managers.ScheduleManager import ScheduleManager
-from services.managers.ScannerManager import ScannerManager
-from services.ScanTracker import ScanTracker
 from modules.utils import __utils__ as utilities
 
 # Ensure directories exist
@@ -19,19 +17,13 @@ async def main():
     # 1. Initialize dependencies
     # We create new instances here because this is a separate process
     db = Database()
-    scanner_manager = ScannerManager()
-    scan_tracker = ScanTracker()
 
     # 2. Initialize Schedule Manager
     schedule_manager = ScheduleManager(database=db)
 
     # 3. Load Jobs & Start Scheduler
     # We pass the dependencies so the jobs can use them (if needed by your logic)
-    scheduler = schedule_manager.initialize_apscheduler_jobs(
-        scanner_manager=scanner_manager,
-        scan_tracker=scan_tracker,
-        database=db
-    )
+    scheduler = schedule_manager.initialize_apscheduler_jobs()
 
     # 4. START the scheduler (Only happens in this process)
     scheduler.start()
