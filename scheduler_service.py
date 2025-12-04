@@ -38,7 +38,10 @@ async def main():
         # 5. Keep the service alive
         logger.info("Service is running. Press Ctrl+C to stop.")
         while True:
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
+            scheduler.get_jobs('default')
+            print(scheduler.print_jobs())
+
 
     except (KeyboardInterrupt, SystemExit):
         logger.info("Stopping scheduler...")

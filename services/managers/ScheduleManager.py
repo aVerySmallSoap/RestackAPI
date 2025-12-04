@@ -27,7 +27,6 @@ class ScheduleManager:
             )
         }
 
-        # Initialize scheduler with the shared jobstore
         self._scheduler = AsyncIOScheduler(jobstores=jobstores)
 
     def _fetch_schedules_from_db(self) -> list:
@@ -95,30 +94,32 @@ class ScheduleManager:
             new_trigger = CronTrigger(**interval)
         else:
             raise ValueError("Invalid interval type. Must be 'interval' or 'cron'")
-
-        # Add to Scheduler (Syncs to DB automatically via JobStore)
-        self._scheduler.add_job(
-            run_scheduled_scan,
-            trigger=new_trigger,
-            id=schedule_id,
-            name=name,
-            args=[target],
-            replace_existing=True,
-            jobstore='default'
-        )
-
-        # Save metadata to your custom table (for UI/Fetching)
-        engine = self._database.engine
-        with Session(engine) as session:
-            new_scan = ScheduledScans(
+        try:
+            # Add to Scheduler (Syncs to DB automatically via JobStore)
+            self._scheduler.add_job(
+                run_scheduled_scan,
+                trigger=new_trigger,
                 id=schedule_id,
-                url=target,
-                codename=name,
-                job_type=interval_type,
-                configuration=interval,
+                name=name,
+                args=[target],
+                replace_existing=True,
+                jobstore='default'
             )
-            session.add(new_scan)
-            session.commit()
+
+            # Save metadata to your custom table (for UI/Fetching)
+            engine = self._database.engine
+            with Session(engine) as session:
+                new_scan = ScheduledScans(
+                    id=schedule_id,
+                    url=target,
+                    codename=name,
+                    job_type=interval_type,
+                    configuration=interval,
+                )
+                session.add(new_scan)
+                session.commit()
+        except Exception as e:
+            logger.error(f"Error adding scan {schedule_id}: {e}")
 
         logger.info(f"Successfully added schedule: {name} ({schedule_id})")
         return schedule_id
