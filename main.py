@@ -498,12 +498,33 @@ async def poll_data_summary(
 
 
 @app.get("/api/v1/analytics/descriptive")
-async def analytics_descriptive(target: str = Query(None, description="Filter by target domain")):
-    """Get descriptive statistics and raw data for Plotly visualizations"""
+async def get_descriptive_analytics(
+        mode: str = Query(
+            "snapshot",
+            description="Analysis mode: 'snapshot' (latest scan per target) or 'time-series' (all historical scans)"
+        ),
+        target: str = Query(
+            None,
+            description="Optional: Filter by target domain (e.g., 'google'). Matches partial URLs."
+        )
+):
+    """
+    Get descriptive statistics (Mean, IQR, Severity Distribution).
+    """
     try:
-        return get_descriptive_stats(target_domain=target)
+        with Session(_db.engine) as session:
+            # Pass the target param to the logic function
+            stats = get_descriptive_stats(session, mode=mode, target_domain=target)
+
+            if "message" in stats and "No reports" in stats["message"]:
+                # You can decide to return 200 with empty stats or 404.
+                # 200 is usually better for analytics dashboards so charts just render empty.
+                return stats
+
+            return stats
+
     except Exception as e:
-        logger.error(f"Failed to generate descriptive analytics: {e}")
+        logger.error(f"Failed to generate descriptive stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test/poll/data/pareto")
@@ -521,9 +542,13 @@ async def poll_data_arrima(target: AnyUrl, forecast_days: int):
     return arima_vulnerability_forecast(target.host, forecast_days)
 
 
-@app.get("/test/poll/data/timeseries/{target}")
-async def poll_data_timeseries(target: AnyUrl, days: int):
-    return calculate_time_series(target.host, days)
+
+@app.get("/test/poll/data/timeseries")
+async def poll_data_timeseries(
+    target: AnyUrl = Query(..., description="Target URL (must include http:// or https://)"),
+    days: int = 90
+):
+    return calculate_time_series(target, days)
 
 
 @app.get("/test/poll/data/correlation")

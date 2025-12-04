@@ -1,61 +1,49 @@
-import pprint
 from datetime import datetime, timedelta
-
-from sqlalchemy.orm.session import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from pydantic import AnyUrl  # Import AnyUrl for type hinting
 
 from modules.db.database import Database
 from modules.db.table_collection import Report, Scan, Vulnerability
 
 
-
-def calculate_time_series(target_url: str, days: int = 30):
+def calculate_time_series(target_url: AnyUrl, days: int = 90):
+    """
+    Generates time-series data for a specific target.
+    Accepts Pydantic AnyUrl and extracts the host for broader database matching.
+    """
     db = Database()
-    engine = db.engine
 
-    with Session(engine) as session:
+    # FIX: Extract the host string (e.g., "example.com") from the AnyUrl object
+    # This allows 'http://example.com' to match 'https://example.com' in the DB
+    domain_str = target_url.host if target_url.host else str(target_url)
+
+    with Session(db.engine) as session:
         cutoff_date = datetime.now() - timedelta(days=days)
 
-        scans = session.query(Report).join(
-            Scan, Report.id == Scan.report_id
-        ).filter(
-            Scan.target_url.contains(target_url),
-            Report.scan_date >= cutoff_date
-        ).order_by(Report.scan_date).all()
+        stmt = (
+            select(Report)
+            .join(Scan, Report.id == Scan.report_id)
+            .where(
+                # Use ilike with the extracted domain string
+                Scan.target_url.ilike(f"%{domain_str}%"),
+                Report.scan_date >= cutoff_date
+            )
+            .order_by(Report.scan_date)
+        )
+
+        scans = session.scalars(stmt).all()
 
         timeseries_data = []
+
         for scan in scans:
-            vulns = session.query(Vulnerability).filter(
-                Vulnerability.report_id == scan.id
-            ).all()
-
-            severity_counts = {
-                "Critical": 0,
-                "High": 0,
-                "Medium": 0,
-                "Low": 0
-            }
-
-            for vuln in vulns:
-                severity_counts[vuln.severity] = severity_counts.get(vuln.severity, 0) + 1
-
+            # Generate the data point
             timeseries_data.append({
-                "date": scan.scan_date.strftime("%Y-%m-%d"),
-                "total_vulnerabilities": scan.total_vulnerabilities,
+                "date": scan.scan_date.strftime("%Y-%m-%d %H:%M"),
+                "count": scan.total_vulnerabilities,
                 "critical_count": scan.critical_count,
-                "severity_breakdown": severity_counts,
+                "total_vulnerabilities": scan.total_vulnerabilities,
                 "scan_type": scan.scan_type
             })
 
-            if len(timeseries_data) >= 2:
-                trend = "increasing" if timeseries_data[-1]["total_vulnerabilities"] > timeseries_data[0]["total_vulnerabilities"] else "decreasing"
-            else:
-                trend = "insufficient data"
-
-    return {
-        "target_url": target_url,
-        "period_days": 30,
-        "scan_count": len(timeseries_data),
-        "trend": trend,
-        "current_total": timeseries_data[-1]["total_vulnerabilities"] if timeseries_data else 0,
-        "previous_total": timeseries_data[0]["total_vulnerabilities"] if timeseries_data else 0
-    }
+    return timeseries_data
