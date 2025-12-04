@@ -615,7 +615,6 @@ async def add_schedule(schedule: ScheduleRequest):
             )
             session.add(new_scan)
             session.commit()
-
         return {
             "message": "Schedule added successfully. It will be picked up by the scheduler service.",
             "schedule_id": schedule_id
