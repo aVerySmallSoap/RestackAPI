@@ -16,6 +16,7 @@ from loguru import logger
 from pydantic import BaseModel, AnyUrl
 
 from modules.analytics.ai_recosum import summarize_with_ai
+from modules.analytics.formal.descriptive import get_descriptive_stats
 from modules.analytics.formal.ARIMMA import arima_vulnerability_forecast
 from modules.analytics.formal.pareto_80_20 import pareto_vulnerability_analysis
 from modules.analytics.formal.correlation_regression import vulnerability_correlation_analysis, \
@@ -495,6 +496,15 @@ async def poll_data_summary(
     # Pass the target to the function
     return get_scan_activity_summary(days, target_domain=target)
 
+
+@app.get("/api/v1/analytics/descriptive")
+async def analytics_descriptive(target: str = Query(None, description="Filter by target domain")):
+    """Get descriptive statistics and raw data for Plotly visualizations"""
+    try:
+        return get_descriptive_stats(target_domain=target)
+    except Exception as e:
+        logger.error(f"Failed to generate descriptive analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test/poll/data/pareto")
 async def poll_data_pareto(target: str = Query(None, description="Filter by target domain")):
