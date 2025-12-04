@@ -17,6 +17,7 @@ from modules.utils.preinstances import scan_tracker
 class ZapScanner(IScannerAdapter):
     _base_zap_path = DEV_ENV['report_paths']['zap']
     _timeout = 10_000
+    EXCLUDED_ALERT_IDS = ["10104"]
 
     @logger.catch
     def start_scan(self, config: dict, **kwargs):
@@ -146,7 +147,20 @@ class ZapScanner(IScannerAdapter):
                     ]
                 }
                 rules_seen = set()
+                alert_fingerprints = set() #Deduplication
                 for alert in report:
+                    plugin_id = alert.get("pluginId")
+                    endpoint_path = url_parser.urlparse(alert.get("url")).path
+
+                    if plugin_id in self.EXCLUDED_ALERT_IDS:
+                        logger.debug(f"Skipping excluded alert ID: {plugin_id}")
+                        continue
+
+                    fingerprint = (plugin_id, endpoint_path)
+                    if fingerprint in alert_fingerprints:
+                        logger.debug(f"Skipping duplicate alert: {plugin_id} on {endpoint_path}")
+                        continue
+                    alert_fingerprints.add(fingerprint)
                     if alert.get("pluginId") not in rules_seen:
                         _rule = {
                             "id": alert.get("pluginId"),
@@ -172,12 +186,12 @@ class ZapScanner(IScannerAdapter):
                     if _alert_har is None:
                         _alert_har = _har_alerts.get(alert.get("id"))
                     _result = {
-                        "ruleId": alert.get("pluginId"),
+                        "ruleId": plugin_id,
                         "message": {"text": alert.get("pluginId")},
                         "locations": [
                             {
                                 "physicalLocation": {
-                                    "artifactLocation": {"uri": url_parser.urlparse(alert.get("url")).path}
+                                    "artifactLocation": {"uri": endpoint_path}
                                 }
                             }
                         ],
