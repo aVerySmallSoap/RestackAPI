@@ -233,7 +233,7 @@ def get_raw_vulnerabilities(
     """
 
     # Base Query: Vuln -> Report -> Scan (to get Target URL)
-    # We use distinct() to avoid duplicates if a report has multiple sub-scans
+    # We use distinct() (no args) to deduplicate identical result rows caused by joins
     stmt = (
         select(
             Vulnerability.severity,
@@ -245,7 +245,7 @@ def get_raw_vulnerabilities(
         )
         .join(Report, Vulnerability.report_id == Report.id)
         .join(Scan, Report.id == Scan.report_id)
-        .distinct(Vulnerability.id)
+        .distinct() # Changed from .distinct(Vulnerability.id) to fix Sort Error
         .order_by(desc(Vulnerability.scan_date))
         .limit(limit)
     )
