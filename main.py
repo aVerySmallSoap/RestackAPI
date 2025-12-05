@@ -16,8 +16,7 @@ from loguru import logger
 from pydantic import BaseModel, AnyUrl
 
 from modules.analytics.ai_recosum import summarize_with_ai
-from modules.analytics.formal.descriptive import get_descriptive_stats
-from modules.analytics.formal.ARIMMA import arima_vulnerability_forecast
+from modules.analytics.formal.descriptive import get_descriptive_stats, get_raw_vulnerabilities
 from modules.analytics.formal.pareto_80_20 import pareto_vulnerability_analysis
 from modules.analytics.formal.correlation_regression import vulnerability_correlation_analysis, \
     regression_vulnerability_prediction
@@ -497,32 +496,39 @@ async def poll_data_summary(
     return get_scan_activity_summary(days, target_domain=target)
 
 
-@app.get("/api/v1/analytics/descriptive")
-async def get_descriptive_analytics(
-        mode: str = Query(
-            "snapshot",
-            description="Analysis mode: 'snapshot' (latest scan per target) or 'time-series' (all historical scans)"
-        ),
-        target: str = Query(
-            None,
-            description="Optional: Filter by target domain (e.g., 'google'). Matches partial URLs."
-        )
+@app.get("/api/v1/analytics/vulnerabilities")
+async def get_vulnerabilities_list(
+    target: str = Query(None),
+    start: str = Query(None),
+    end: str = Query(None)
 ):
     """
-    Get descriptive statistics (Mean, IQR, Severity Distribution).
+    Get raw vulnerability list for the data table
     """
     try:
         with Session(_db.engine) as session:
-            # Pass the target param to the logic function
-            stats = get_descriptive_stats(session, mode=mode, target_domain=target)
+            return get_raw_vulnerabilities(
+                session,
+                target_domain=target,
+                start_date=start,
+                end_date=end
+            )
+    except Exception as e:
+        logger.error(f"Failed to fetch vulnerability list: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-            if "message" in stats and "No reports" in stats["message"]:
-                # You can decide to return 200 with empty stats or 404.
-                # 200 is usually better for analytics dashboards so charts just render empty.
-                return stats
-
+@app.get("/api/v1/analytics/descriptive")
+async def get_descriptive_analytics(
+        mode: str = Query("snapshot"),
+        target: str = Query(None),
+        start: str = Query(None),
+        end: str = Query(None)
+):
+    try:
+        with Session(_db.engine) as session:
+            # You will need to update get_descriptive_stats to accept start/end too
+            stats = get_descriptive_stats(session, mode=mode, target_domain=target, start_date=start, end_date=end)
             return stats
-
     except Exception as e:
         logger.error(f"Failed to generate descriptive stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -545,10 +551,12 @@ async def poll_data_arrima(target: AnyUrl, forecast_days: int):
 
 @app.get("/test/poll/data/timeseries")
 async def poll_data_timeseries(
-    target: AnyUrl = Query(..., description="Target URL (must include http:// or https://)"),
-    days: int = 90
+    target: AnyUrl = Query(..., description="Target URL"),
+    days: int = 90,
+    start: str = Query(None, description="Start date (YYYY-MM-DD)"),
+    end: str = Query(None, description="End date (YYYY-MM-DD)")
 ):
-    return calculate_time_series(target, days)
+    return calculate_time_series(target, days, start_date=start, end_date=end)
 
 
 @app.get("/test/poll/data/correlation")
