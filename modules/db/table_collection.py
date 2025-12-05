@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import String, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, relationship
 from sqlalchemy.testing.schema import mapped_column
+from sqlalchemy import BigInteger
 
 from modules.db.session import Base
 
@@ -35,6 +36,7 @@ class Scan(Base):
     __tablename__ = "scan"
 
     id: Mapped[str] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     report_id: Mapped[str] = mapped_column(ForeignKey('reports.id'))
     scan_date: Mapped[datetime]
     scanner: Mapped[str] = mapped_column(String(50))

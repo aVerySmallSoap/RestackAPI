@@ -76,6 +76,7 @@ app.add_middleware(
 
 class ScanRequest(BaseModel):
     url: AnyUrl
+    user_id: int | None = None # Add this field
     config: dict | None = None
 
 
