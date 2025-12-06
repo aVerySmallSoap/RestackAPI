@@ -39,7 +39,9 @@ def start_automatic_zap_service(config: dict) -> Container:
         ["zap.sh", "-daemon", "-Xmx8g", "-host", "0.0.0.0", "-port", f"{config['port']}", "-dir",
          f"/tmp/{config['session_name']}", "-config",
          "api.addrs.addr.name=.*", "-config", "api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}", "-config", "start.checkAddonUpdates=false", "-config", "start.checkForUpdates=false"],
-        volumes={f"{_zap_path}\\{config['session_name']}": {"bind": f"/tmp/{config['session_name']}", "mode": "rw"}},
+        volumes={
+            f"{_zap_path}\\{config['session_name']}": {"bind": f"/tmp/{config['session_name']}", "mode": "rw"}
+        },
         ports={f"{config['port']}/tcp": config["port"]},
         name=f"{config['session_name']}",
         detach=True

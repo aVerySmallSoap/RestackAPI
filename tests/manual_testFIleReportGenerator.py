@@ -44,7 +44,7 @@ def setup_test_data():
             data={"info": "manual test data"}  # Added test data
         )
 
-        # 3. Tech Discovery
+        # 3. Tech discovery
         tech_data = [
             [{"Apache": "2.4.5"}],  # versioned
             [{"React": {}}],  # unversioned
