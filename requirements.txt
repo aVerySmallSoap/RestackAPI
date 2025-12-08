@@ -1,24 +1,39 @@
-apscheduler
-wapiti3
+# Core API & Async
 fastapi[standard]
-tz
+aiofiles
+
+# Database
 SQLAlchemy
 SQLAlchemy-Utils
-psycopg2
-bs4
-beautifulsoup4
-requests
-ijson
-zaproxy
+psycopg2-binary
+
+# Security & Scanning
+wapiti3
+python-owasp-zap-v2.4
 docker
+
+# Data Processing & AI
 pandas
-openpyxl
+ijson
 google-genai
-aiofiles
+
+# Utilities & Networking
+# FIXED: 'request' -> 'requests'
+requests
+beautifulsoup4
+apscheduler
 loguru
+<<<<<<< Updated upstream
 reportlab
 websockets
 gunicorn
 uvicorn[standard]
 statsmodels
 scikit-learn
+=======
+pytz
+
+# File Export
+openpyxl
+reportlab
+>>>>>>> Stashed changes

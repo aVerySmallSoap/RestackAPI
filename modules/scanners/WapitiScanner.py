@@ -1,10 +1,11 @@
 import json
-import subprocess
+import os
 
 from loguru import logger
 
 from modules.interfaces.IScannerAdapter import IScannerAdapter
 from modules.utils.load_configs import DEV_ENV
+from modules.utils.subprocess_utils import run_command_sync
 from services.builders.WapitiConfigBuilder import WapitiConfigBuilder
 
 
@@ -16,10 +17,15 @@ class WapitiAdapter(IScannerAdapter):
         :param config:
         """
         config_builder = WapitiConfigBuilder()
-        _config = config_builder.url(config.get("url")).modules(config.get("modules")).output_path(
-            config.get("session")).build()
-        process = subprocess.Popen(_config, creationflags=(subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW))
-        process.wait()
+        _config = (
+            config_builder.url(config.get("url"))
+            .modules(config.get("modules"))
+            .output_path(config.get("session"))
+            .build()
+        )
+
+        # Cross-platform subprocess execution
+        run_command_sync(_config, detached=True)
         return self.parse_results(config.get("session"))
 
     def stop_scan(self, scan_id: str | int) -> int:
@@ -32,7 +38,10 @@ class WapitiAdapter(IScannerAdapter):
         with open(DEV_ENV["templates_path"]["wapiti"], "r") as file:
             _template = json.load(file)
             if len(user_config) == 0:
-                return {"error": True, "message": "Invalid config: Configuration empty!"}
+                return {
+                    "error": True,
+                    "message": "Invalid config: Configuration empty!",
+                }
             for key, value in user_config.items():
                 match key:
                     case "url":
@@ -59,9 +68,15 @@ class WapitiAdapter(IScannerAdapter):
         :type session: str
         :return: The parsed report"""
         logger.debug("Parsing Wapiti report...")
-        sarif_report = {"version": "2.1.0",
-                        "runs": [{"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}]}
-        with open(f"{self._wapiti_base_path}\\{session}.json", "r") as report:
+        sarif_report = {
+            "version": "2.1.0",
+            "runs": [
+                {"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}
+            ],
+        }
+
+        report_path = os.path.join(self._wapiti_base_path, f"{session}.json")
+        with open(report_path, "r") as report:
             report = json.load(report)
             self._parse_definitions_to_sarif(sarif_report, report)
             for category in report["vulnerabilities"]:
@@ -76,7 +91,12 @@ class WapitiAdapter(IScannerAdapter):
                                     result.update({"message": {"text": value}})
                                 case "path":
                                     result["locations"].append(
-                                        {"physicalLocation": {"artifactLocation": {"uri": value}}})
+                                        {
+                                            "physicalLocation": {
+                                                "artifactLocation": {"uri": value}
+                                            }
+                                        }
+                                    )
                                 case _:
                                     if key == "wstg":
                                         result["properties"].update({"wstg": value})
@@ -134,5 +154,6 @@ class WapitiAdapter(IScannerAdapter):
     def start_automatic_scan(url: str, user_config: dict = None):
         config_builder = WapitiConfigBuilder()
         _config = config_builder.url(url).output_path(user_config["path"]).build()
-        process = subprocess.Popen(_config, creationflags=(subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW))
-        process.wait()
+
+        # Cross-platform subprocess execution
+        run_command_sync(_config, detached=True)

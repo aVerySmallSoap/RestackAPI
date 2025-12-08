@@ -1,14 +1,14 @@
 import asyncio
 import json
+import os
 import time
 from datetime import datetime
-from sqlalchemy.orm import Session
 
 import aiofiles
 
 from modules.analytics.vulnerability_analysis import analyze_results
 from modules.db.database import Database
-from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, ScanStep
+from modules.interfaces.enums.restack_enums import ScannerType, ScanStep, ZAPScanType
 from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.utils.__utils__ import check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
@@ -16,6 +16,7 @@ from modules.utils.preinstances import scan_tracker
 from services.managers.ScannerManager import ScannerManager
 
 database = Database()
+
 
 async def run_scheduled_scan(url):
     # Init
@@ -29,11 +30,7 @@ async def run_scheduled_scan(url):
     _URL = check_url_local_test(str(url))
     session_id = scan_tracker.generate_unique_session()
     zap_config = local_scanner_manager.generate_random_config()
-    wapiti_config = _wapiti_scanner.generate_config(
-        {
-            "modules": ["all"]
-        }
-    )
+    wapiti_config = _wapiti_scanner.generate_config({"modules": ["all"]})
     scan_tracker.add_scan(session_id, _URL, ScanStep.INIT)
 
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
@@ -44,7 +41,7 @@ async def run_scheduled_scan(url):
         scanner_type=ScannerType.ZAP,
         scan_type=ZAPScanType.FULL,
         api_key=zap_config["api_key"],
-        port=zap_config["port"]
+        port=zap_config["port"],
     )
 
     wapiti_result = await asyncio.to_thread(
@@ -54,32 +51,37 @@ async def run_scheduled_scan(url):
         session_id,
         scanner_type=ScannerType.WAPITI,
         wapiti_config=wapiti_config,
-        scanner_instance=_wapiti_scanner
+        scanner_instance=_wapiti_scanner,
     )
 
     # Analytics
     scan_tracker.advance_step(session_id, ScanStep.ANALYZING)
-    _results = analyze_results(session_id, wapiti_result, zap_result, raw_whatweb_result, query_result)
+    _results = analyze_results(
+        session_id, wapiti_result, zap_result, raw_whatweb_result, query_result
+    )
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start
 
     # DB write
     scan_tracker.advance_step(session_id, ScanStep.SAVING)
+    report_path = os.path.join(full_scan_path, f"{session_id}.json")
+
     if query_result.__contains__("error"):
-        f = await aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w")
-        await f.write(json.dumps(
-            {
-                "data": _results,
-                "plugins": {
-                    "fingerprinted": raw_whatweb_result,
-                    "patchable": query_result
-                },
-                "scan_time": scan_time
-            },
-            indent=4)
-        )
-        await f.close()
+        async with aiofiles.open(report_path, "w") as f:
+            await f.write(
+                json.dumps(
+                    {
+                        "data": _results,
+                        "plugins": {
+                            "fingerprinted": raw_whatweb_result,
+                            "patchable": query_result,
+                        },
+                        "scan_time": scan_time,
+                    },
+                    indent=4,
+                )
+            )
 
         database.insert_automated_report(
             _scan_start,
@@ -88,22 +90,23 @@ async def run_scheduled_scan(url):
             wapiti_result,
             _results,
             scan_time,
-            _URL
+            _URL,
         )
     else:
-        f = await aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w")
-        await f.write(json.dumps(
-            {
-                "data": _results,
-                "plugins": {
-                    "fingerprinted": raw_whatweb_result["data"],
-                    "patchable": query_result
-                },
-                "scan_time": scan_time
-            },
-            indent=4)
-        )
-        await f.close()
+        async with aiofiles.open(report_path, "w") as f:
+            await f.write(
+                json.dumps(
+                    {
+                        "data": _results,
+                        "plugins": {
+                            "fingerprinted": raw_whatweb_result["data"],
+                            "patchable": query_result,
+                        },
+                        "scan_time": scan_time,
+                    },
+                    indent=4,
+                )
+            )
 
         database.insert_automated_report(
             _scan_start,
@@ -112,6 +115,6 @@ async def run_scheduled_scan(url):
             wapiti_result,
             _results,
             scan_time,
-            _URL
+            _URL,
         )
     scan_tracker.advance_step(session_id, ScanStep.SUCCESS)

@@ -1,18 +1,19 @@
 {
-  "templates_path": {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\templates\\wapiti_config.json",
-    "active_scans": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\templates\\active_scan.json",
-    "whatweb": "",
-    "zap": ""
-  },
-  "report_paths": {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\wapiti",
-    "whatweb": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\whatweb",
-    "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap",
-    "searchVulns": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\search_vulns",
-    "full_scan": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\full_scan"
-  },
-  "api_keys": {
-    "gemini": "test_key"
-  }
+    "templates_path": {
+        "wapiti": "templates/wapiti_config.json",
+        "active_scans": "templates/active_scan.json",
+        "whatweb": "",
+        "zap": ""
+    },
+    "report_paths": {
+        "wapiti": "reports/wapiti",
+        "whatweb": "temp/whatweb",
+        "zap": "temp/zap",
+        "searchVulns": "temp/search_vulns",
+        "full_scan": "reports/full_scan",
+        "exports": "reports/exports"
+    },
+    "api_keys": {
+        "gemini": "test_key"
+    }
 }

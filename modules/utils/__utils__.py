@@ -1,8 +1,11 @@
 import asyncio
-import os
 import socket
 import uuid
 from typing import TYPE_CHECKING
+
+from loguru import logger
+
+from modules.utils.directory_utils import ensure_directory_exists
 
 if TYPE_CHECKING:
     from services.managers.ScannerManager import ScannerManager
@@ -40,8 +43,10 @@ def critical_counter(sarif_report: dict, rules: dict | list = None) -> int:
                 if str.lower(vulnerability.get("level", "")) == "error":
                     count += 1
             else:
-                if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(
-                        _rule["properties"]["risk"]) == "critical":
+                if (
+                    str.lower(_rule["properties"]["risk"]) == "high"
+                    or str.lower(_rule["properties"]["risk"]) == "critical"
+                ):
                     count += 1
         return count
     else:
@@ -57,19 +62,37 @@ def critical_counter(sarif_report: dict, rules: dict | list = None) -> int:
                     if str.lower(vulnerability["level"]) == "error":
                         count += 1
                 else:
-                    if str.lower(_rule["properties"]["risk"]) == "high" or str.lower(
-                            _rule["properties"]["risk"]) == "critical":
+                    if (
+                        str.lower(_rule["properties"]["risk"]) == "high"
+                        or str.lower(_rule["properties"]["risk"]) == "critical"
+                    ):
                         count += 1
         return count
 
 
 def check_directories():
-    """This functions should check the existence of several required directories.
-    These directories are reports and temp"""
-    if not os.path.exists("./reports"):
-        os.mkdir("./reports")
-    if not os.path.exists("./temp"):
-        os.mkdir("./temp")
+    """
+    Ensures all required directories exist with proper permissions.
+    Creates them if they don't exist.
+    """
+    from modules.utils.load_configs import DEV_ENV
+
+    # List of all directories that need to exist
+    directories = [
+        DEV_ENV["report_paths"]["wapiti"],
+        DEV_ENV["report_paths"]["whatweb"],
+        DEV_ENV["report_paths"]["zap"],
+        DEV_ENV["report_paths"]["searchVulns"],
+        DEV_ENV["report_paths"]["full_scan"],
+        DEV_ENV["report_paths"]["exports"],
+        "./logs",  # For loguru logs
+    ]
+
+    for directory in directories:
+        if directory:  # Skip empty strings
+            ensure_directory_exists(directory, mode=0o777)
+            logger.info(f"Verified directory: {directory}")
+
 
 def create_required_files_and_directories():
     """
@@ -104,5 +127,3 @@ def run_start_scan(instance: "ScannerManager", url: str, session: str, **config)
     Run the async start_scan from ScannerManager in a coroutine.
     """
     return asyncio.run(instance.start_scan(url, session, **config))
-
-

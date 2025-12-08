@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import time
 from urllib import parse as url_parser
@@ -8,14 +9,14 @@ from loguru import logger
 from zapv2 import ZAPv2
 
 import modules.utils.docker_utils as docker_utilities
+from modules.interfaces.enums.restack_enums import ScanStep, ZAPScanType
 from modules.interfaces.IScannerAdapter import IScannerAdapter
-from modules.interfaces.enums.restack_enums import ZAPScanType, ScanStep
 from modules.utils.load_configs import DEV_ENV
 from modules.utils.preinstances import scan_tracker
 
 
 class ZapScanner(IScannerAdapter):
-    _base_zap_path = DEV_ENV['report_paths']['zap']
+    _base_zap_path = DEV_ENV["report_paths"]["zap"]
     _timeout = 10_000
     EXCLUDED_ALERT_IDS = ["10104"]
 
@@ -27,22 +28,28 @@ class ZapScanner(IScannerAdapter):
             {
                 "port": config.get("port"),
                 "apikey": config.get("api_key"),
-                "session_name": config.get("session")
+                "session_name": config.get("session"),
             }
         )
         _start_time = time.time()
         while time.time() - _start_time < self._timeout:
             logger.debug("Sending a request to ZAP...")
             try:
-                response = requests.get(f"http://localhost:{config.get('port')}/JSON/core/view/version/",
-                                        params={"apikey": config.get("api_key")}, timeout=30)
+                response = requests.get(
+                    f"http://localhost:{config.get('port')}/JSON/core/view/version/",
+                    params={"apikey": config.get("api_key")},
+                    timeout=30,
+                )
                 if response.status_code == 200:
-                    logger.info("Zap API was found and is ready! Version {}", response.json().get("version"))
+                    logger.info(
+                        "Zap API was found and is ready! Version {}",
+                        response.json().get("version"),
+                    )
                     break
             except requests.exceptions.ConnectionError:
                 logger.debug("Zap API is not responding, we will try again...")
                 time.sleep(30)
-            except Exception as e:
+            except Exception:
                 # print(type(e)) # ConnectionError
                 logger.error("We could not find the Zap API")
                 break
@@ -55,7 +62,7 @@ class ZapScanner(IScannerAdapter):
                 proxies={
                     "http": f"127.0.0.1:{config.get('port')}",
                     "https": f"127.0.0.1:{config.get('port')}",
-                }
+                },
             )
         else:
             zap = config.get("zap_instance")
@@ -70,7 +77,7 @@ class ZapScanner(IScannerAdapter):
                         api_key=config.get("api_key"),
                         port=config.get("port"),
                         session=config.get("session"),
-                        url=config.get("url")
+                        url=config.get("url"),
                     )
                 case ZAPScanType.ACTIVE:
                     logger.debug("Starting an active scan run...")
@@ -79,7 +86,7 @@ class ZapScanner(IScannerAdapter):
                         api_key=config.get("api_key"),
                         port=config.get("port"),
                         session=config.get("session"),
-                        url=config.get("url")
+                        url=config.get("url"),
                     )
                 case ZAPScanType.FULL:
                     logger.debug("Starting a full scan run...")
@@ -88,26 +95,30 @@ class ZapScanner(IScannerAdapter):
                         api_key=config.get("api_key"),
                         port=config.get("port"),
                         session=config.get("session"),
-                        url=config.get("url")
+                        url=config.get("url"),
                     )
                     self.start_active_scan(
                         zap,
                         api_key=config.get("api_key"),
                         port=config.get("port"),
                         session=config.get("session"),
-                        url=config.get("url")
+                        url=config.get("url"),
                     )
                 case _:
                     # log
                     raise TypeError  # There is no valid argumentor match that was passed here
-            _returnable = self.parse_results(zap_instance=zap, session=config.get("session"))
+            _returnable = self.parse_results(
+                zap_instance=zap, session=config.get("session")
+            )
             logger.info("Zap scan completed successfully.")
             logger.debug("Waiting 10 seconds before starting a cleanup...")
             time.sleep(10)
             logger.debug("Cleaning up containers and associated directories...")
             container.stop()
             container.remove()
-            shutil.rmtree(f"{self._base_zap_path}\\{config.get('session')}")
+            session_dir = os.path.join(self._base_zap_path, config.get("session"))
+            if os.path.exists(session_dir):
+                shutil.rmtree(session_dir)
             return _returnable
         except TypeError as type_e:
             # log
@@ -128,26 +139,25 @@ class ZapScanner(IScannerAdapter):
         logger.info(f"Parsing results for {config.get('session')}")
         scan_tracker.advance_step(config.get("session"), ScanStep.PARSING)
         try:
-            _har_alerts = self._fetch_header_and_request_alerts(config.get("zap_instance"),
-                                                                session=config.get("session"))
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
+            _har_alerts = self._fetch_header_and_request_alerts(
+                config.get("zap_instance"), session=config.get("session")
+            )
+            report_path = os.path.join(
+                self._base_zap_path, f"{config.get('session')}.json"
+            )
+            with open(report_path, "r") as f:
                 report = json.load(f)
                 _sarif = {
                     "version": "2.1.0",
                     "runs": [
                         {
-                            "tool": {
-                                "driver": {
-                                    "name": "OWASP ZAP",
-                                    "rules": []
-                                }
-                            },
-                            "results": []
+                            "tool": {"driver": {"name": "OWASP ZAP", "rules": []}},
+                            "results": [],
                         }
-                    ]
+                    ],
                 }
                 rules_seen = set()
-                alert_fingerprints = set() #Deduplication
+                alert_fingerprints = set()  # Deduplication
                 for alert in report:
                     plugin_id = alert.get("pluginId")
                     endpoint_path = url_parser.urlparse(alert.get("url")).path
@@ -158,7 +168,9 @@ class ZapScanner(IScannerAdapter):
 
                     fingerprint = (plugin_id, endpoint_path)
                     if fingerprint in alert_fingerprints:
-                        logger.debug(f"Skipping duplicate alert: {plugin_id} on {endpoint_path}")
+                        logger.debug(
+                            f"Skipping duplicate alert: {plugin_id} on {endpoint_path}"
+                        )
                         continue
                     alert_fingerprints.add(fingerprint)
                     if alert.get("pluginId") not in rules_seen:
@@ -169,14 +181,16 @@ class ZapScanner(IScannerAdapter):
                             "help": {
                                 "text": alert.get("solution"),
                                 "markdown": "\n".join(
-                                    f"[{ref}]({link})" for ref, link in alert.get("tags").items() if link != ""
-                                )
+                                    f"[{ref}]({link})"
+                                    for ref, link in alert.get("tags").items()
+                                    if link != ""
+                                ),
                             },
                             "properties": {
                                 "cwe": alert.get("cweid"),
                                 "wasc": alert.get("wascid"),
-                                "risk": alert.get("risk")
-                            }
+                                "risk": alert.get("risk"),
+                            },
                         }
                         _sarif["runs"][0]["tool"]["driver"]["rules"].append(_rule)
                         rules_seen.add(alert.get("pluginId"))
@@ -200,8 +214,8 @@ class ZapScanner(IScannerAdapter):
                             "evidence": alert.get("evidence"),
                             "confidence": alert.get("confidence"),
                             "har": _alert_har,
-                            "zapId": alert.get("id")
-                        }
+                            "zapId": alert.get("id"),
+                        },
                     }
                     if alert.get("other"):
                         _result["properties"]["other"] = alert.get("other")
@@ -230,12 +244,11 @@ class ZapScanner(IScannerAdapter):
             while int(zap.pscan.records_to_scan) > 0:
                 time.sleep(2)
 
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
-                file.write(
-                    json.dumps(
-                        zap.core.alerts(baseurl=config.get("url"))
-                    )
-                )
+            report_path = os.path.join(
+                self._base_zap_path, f"{config.get('session')}.json"
+            )
+            with open(report_path, "w") as file:
+                file.write(json.dumps(zap.core.alerts(baseurl=config.get("url"))))
                 file.flush()
                 file.close()
         except Exception:
@@ -250,7 +263,10 @@ class ZapScanner(IScannerAdapter):
             while int(zap.ascan.status(scan_id)) < 100:
                 # log
                 time.sleep(2)
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
+            report_path = os.path.join(
+                self._base_zap_path, f"{config.get('session')}.json"
+            )
+            with open(report_path, "w") as file:
                 file.write(json.dumps(zap.core.alerts(baseurl=config.get("url"))))
                 file.flush()
                 file.close()
@@ -277,7 +293,11 @@ class ZapScanner(IScannerAdapter):
                 scan_id = zap.spider.scan(url=config.get("url"), recurse=True)
                 time.sleep(5)
                 while int(zap.spider.status(scan_id)) < 100:
-                    print(f"Traditional spider crawling @ {int(zap.spider.status(scan_id))}%")
+                    print(
+                        f"Traditional spider crawling @ {
+                            int(zap.spider.status(scan_id))
+                        }%"
+                    )
                     time.sleep(5)
 
                 # Additional context (future feature for seeding more URLs)
@@ -296,7 +316,11 @@ class ZapScanner(IScannerAdapter):
                 zap.ajaxSpider.scan(config.get("url"))
                 time.sleep(5)
                 while zap.ajaxSpider.status == "running":
-                    print(f"Ajax spider crawling and is currently: {zap.ajaxSpider.status}")
+                    print(
+                        f"Ajax spider crawling and is currently: {
+                            zap.ajaxSpider.status
+                        }"
+                    )
                     time.sleep(5)
             except Exception:
                 # log
@@ -309,12 +333,22 @@ class ZapScanner(IScannerAdapter):
                     "X-ZAP-API-Key": config.get("api_key"),
                 }
                 base = f"http://localhost:{config.get('port')}/JSON"
-                scan_id = requests.get(f"{base}/clientSpider/action/scan",
-                                       params={"url": config.get("url"), "pageLoadTime": "30"}, headers=headers).json()[
-                    'scan']
+                scan_id = requests.get(
+                    f"{base}/clientSpider/action/scan",
+                    params={"url": config.get("url"), "pageLoadTime": "30"},
+                    headers=headers,
+                ).json()["scan"]
                 time.sleep(2)
-                while int(requests.get(f'{base}/clientSpider/view/status', params={'scanId': scan_id},
-                                       headers=headers).json()['status']) < 100:
+                while (
+                    int(
+                        requests.get(
+                            f"{base}/clientSpider/view/status",
+                            params={"scanId": scan_id},
+                            headers=headers,
+                        ).json()["status"]
+                    )
+                    < 100
+                ):
                     time.sleep(2)
             except Exception:
                 # log
@@ -328,7 +362,10 @@ class ZapScanner(IScannerAdapter):
     def _fetch_header_and_request_alerts(self, zap: ZAPv2, **config) -> dict:
         logger.info("Fetching headers and request alerts...")
         try:
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
+            report_path = os.path.join(
+                self._base_zap_path, f"{config.get('session')}.json"
+            )
+            with open(report_path, "r") as f:
                 report = json.load(f)
                 message_ids: str = ""
                 for alert in report:
@@ -346,11 +383,14 @@ class ZapScanner(IScannerAdapter):
                                 "requestBody": message.get("requestBody"),
                                 "requestHeader": message.get("requestHeader"),
                                 "responseBody": message.get("responseBody"),
-                                "responseHeader": message.get("responseHeader")
+                                "responseHeader": message.get("responseHeader"),
                             }
                             _har_list.append(har)
                         for har in _har_list:
-                            if len(_returnable) == 0 or har.get("id") not in _returnable:
+                            if (
+                                len(_returnable) == 0
+                                or har.get("id") not in _returnable
+                            ):
                                 _returnable[har.get("id")] = har
                             else:
                                 listed = _returnable.get(har.get("id"))

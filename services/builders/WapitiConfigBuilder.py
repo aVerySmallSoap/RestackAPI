@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 from loguru import logger
@@ -10,7 +11,18 @@ from modules.utils.load_configs import DEV_ENV
 class WapitiConfigBuilder(IConfigBuilder):
     _wapiti_base_path = DEV_ENV["report_paths"]["wapiti"]
     _args: list[str] = ["-u", "-m", "-o", "-S", "--max-scan-time", "--tasks"]
-    _commands: list[str] = ["wapiti", "-v", "2", "-f", "json", "-l", "2", "--headless", "hidden", "--flush-session"]
+    _commands: list[str] = [
+        "wapiti",
+        "-v",
+        "2",
+        "-f",
+        "json",
+        "-l",
+        "2",
+        "--headless",
+        "hidden",
+        "--flush-session",
+    ]
 
     # == Configurable ==
     _url: Optional[str] = None  # Flag: -u !!REQUIRED
@@ -20,7 +32,9 @@ class WapitiConfigBuilder(IConfigBuilder):
     _scan_time: Optional[str] = None  # Flag: --max-scan-time
     _concurrent_tasks: Optional[str] = None  # Flag: --tasks
     _custom_args: Optional[list[str]] = None
-    _is_overridden: bool = False  # Check if the user overrides with special custom arguments
+    _is_overridden: bool = (
+        False  # Check if the user overrides with special custom arguments
+    )
 
     # == validation ==
     _invalid_args: list[WapitiArgs] = []
@@ -40,7 +54,7 @@ class WapitiConfigBuilder(IConfigBuilder):
         try:
             if session is None:
                 raise ValueError
-            self._path = f"{self._wapiti_base_path}\\{session}.json"
+            self._path = os.path.join(self._wapiti_base_path, f"{session}.json")
             return self
         except ValueError:
             logger.error("There should always be a session!")

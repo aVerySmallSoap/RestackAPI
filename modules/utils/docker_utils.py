@@ -32,15 +32,37 @@ def update_zap_service():
 
 def start_automatic_zap_service(config: dict) -> Container:
     client = docker.from_env()
-    if not os.path.exists(f"{_zap_path}\\{config['session_name']}"):
-        os.mkdir(f"{_zap_path}\\{config['session_name']}")
+    session_dir = os.path.join(_zap_path, config["session_name"])
+
+    if not os.path.exists(session_dir):
+        os.makedirs(session_dir, exist_ok=True)
+
     return client.containers.run(
         "zaproxy/zap-stable",
-        ["zap.sh", "-daemon", "-Xmx8g", "-host", "0.0.0.0", "-port", f"{config['port']}", "-dir",
-         f"/tmp/{config['session_name']}", "-config",
-         "api.addrs.addr.name=.*", "-config", "api.addrs.addr.regex=true", "-config", f"api.key={config["apikey"]}", "-config", "start.checkAddonUpdates=false", "-config", "start.checkForUpdates=false"],
-        volumes={f"{_zap_path}\\{config['session_name']}": {"bind": f"/tmp/{config['session_name']}", "mode": "rw"}},
+        [
+            "zap.sh",
+            "-daemon",
+            "-Xmx8g",
+            "-host",
+            "0.0.0.0",
+            "-port",
+            f"{config['port']}",
+            "-dir",
+            f"/tmp/{config['session_name']}",
+            "-config",
+            "api.addrs.addr.name=.*",
+            "-config",
+            "api.addrs.addr.regex=true",
+            "-config",
+            f"api.key={config['apikey']}",
+            "-config",
+            "start.checkAddonUpdates=false",
+            "-config",
+            "start.checkForUpdates=false",
+        ],
+        volumes={session_dir: {"bind": f"/tmp/{config['session_name']}", "mode": "rw"}},
         ports={f"{config['port']}/tcp": config["port"]},
         name=f"{config['session_name']}",
-        detach=True
+        user=f"{os.getuid()}:{os.getgid()}",
+        detach=True,
     )
