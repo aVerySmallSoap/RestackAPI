@@ -16,7 +16,7 @@ from loguru import logger
 from pydantic import BaseModel, AnyUrl
 
 from modules.analytics.ai_recosum import summarize_with_ai
-from modules.analytics.formal.descriptive import get_descriptive_stats, get_raw_vulnerabilities
+from modules.analytics.formal.descriptive import get_general_analytics, get_raw_vulnerabilities
 from modules.analytics.formal.pareto_80_20 import pareto_vulnerability_analysis
 from modules.analytics.formal.correlation_regression import vulnerability_correlation_analysis, \
     regression_vulnerability_prediction
@@ -518,6 +518,24 @@ async def get_vulnerabilities_list(
         logger.error(f"Failed to fetch vulnerability list: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/analytics/dashboard")
+async def get_dashboard_data(
+    target: str = Query(None, description="Filter by target domain"),
+    start: str = Query(None, description="YYYY-MM-DD"),
+    end: str = Query(None, description="YYYY-MM-DD")
+):
+    try:
+        with Session(_db.engine) as session:
+            return get_general_analytics(
+                session,
+                target_domain=target,
+                start_date=start,
+                end_date=end
+            )
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/analytics/descriptive")
 async def get_descriptive_analytics(
         mode: str = Query("snapshot"),
@@ -532,6 +550,27 @@ async def get_descriptive_analytics(
             return stats
     except Exception as e:
         logger.error(f"Failed to generate descriptive stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/analytics/executive")
+async def get_executive_report(
+    target: str = Query(None, description="Filter by target domain (e.g., example.com)"),
+    days: int = Query(90, description="Lookback period for stability analysis")
+):
+    """
+    Returns the 'External Posture & Compliance' Scorecard.
+    This endpoint separates high-confidence compliance findings from unverified leads.
+    """
+    try:
+        # Use the global _db object initialized in main.py
+        with Session(_db.engine) as session:
+            return get_executive_analytics(
+                session,
+                target_domain=target,
+                days=days
+            )
+    except Exception as e:
+        logger.error(f"Failed to generate executive report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test/poll/data/pareto")

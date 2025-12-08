@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, desc
 from sqlalchemy.orm import Session
 import pandas as pd
 import numpy as np
@@ -8,216 +8,131 @@ import numpy as np
 from modules.db.table_collection import Report, Scan, Vulnerability
 
 
-def get_descriptive_stats(
+def get_general_analytics(
         session: Session,
-        mode: str = "snapshot",
         target_domain: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Calculates stats with support for Date Ranges and correct Contextual Logic.
+    Standardized Analytics Endpoint for Visualizations.
     """
 
-    # 1. Prepare Date Filters
-    date_filters = []
+    # 1. DATE FILTER LOGIC
     if start_date and end_date:
         try:
             s_date = datetime.strptime(start_date, "%Y-%m-%d")
-            # Add 1 day to include the end date fully
             e_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-            date_filters = [Scan.scan_date >= s_date, Scan.scan_date < e_date]
+            cutoff_filter = and_(Report.scan_date >= s_date, Report.scan_date < e_date)
         except ValueError:
-            pass  # Invalid date format, ignore filters
-
-    # 2. Base Query Construction
-    stmt = select(Report).join(Scan, Report.id == Scan.report_id)
-
-    if mode == "snapshot":
-        # SNAPSHOT MODE:
-        # We need the "Latest Scan" for EVERY target within the date range (Global Context).
-        # This ensures IQR and Prevalence are calculated against the full landscape.
-
-        # Subquery: Find the max date for each target (respecting filters)
-        subq_query = select(
-            Scan.target_url,
-            func.max(Scan.scan_date).label("latest_date")
-        ).group_by(Scan.target_url)
-
-        if date_filters:
-            subq_query = subq_query.where(and_(*date_filters))
-
-        latest_scan_subq = subq_query.subquery()
-
-        # Join main query to this subquery
-        stmt = stmt.join(
-            latest_scan_subq,
-            and_(
-                Scan.target_url == latest_scan_subq.c.target_url,
-                Scan.scan_date == latest_scan_subq.c.latest_date
-            )
-        )
-
-        # NOTE: We do NOT apply 'target_domain' filter here yet.
-        # We fetch all targets to calculate global stats (Prevalence/IQR),
-        # then filter for the specific target in the DataFrame step.
-
+            return {"error": "Invalid date format. Use YYYY-MM-DD"}
     else:
-        # TIME-SERIES / HISTORICAL MODE:
-        # We just want all records matching criteria.
+        # Default 90 Days
+        cutoff_date = datetime.now() - timedelta(days=90)
+        cutoff_filter = Report.scan_date >= cutoff_date
 
-        # Apply Date Filters
-        if date_filters:
-            stmt = stmt.where(and_(*date_filters))
+    # 2. FETCH HISTORY
+    stmt = select(Report).join(Scan, Report.id == Scan.report_id).where(cutoff_filter)
 
-        # Apply Target Filter (Strict filtering for time-series)
-        if target_domain and target_domain != 'all':
-            stmt = stmt.where(Scan.target_url.ilike(f"%{target_domain}%"))
+    if target_domain and target_domain != 'all':
+        stmt = stmt.where(Scan.target_url.ilike(f"%{target_domain}%"))
 
-    # Execute Query
     reports = session.scalars(stmt).unique().all()
 
     if not reports:
-        return {"meta": {"count": 0}, "message": "No reports found for this selection."}
+        return {"error": "No data available"}
 
-    # 3. Process Data into DataFrames
-    report_data = []
-
+    # 3. STATISTICAL ANALYSIS (Stability & Trend)
+    history_data = []
     for r in reports:
-        if r.scan and len(r.scan) > 0:
-            report_data.append({
-                "report_id": r.id,
-                "target": r.scan[0].target_url,
-                "total_vulns": r.total_vulnerabilities
-            })
+        history_data.append({
+            "date": r.scan_date.strftime("%Y-%m-%d"),
+            "timestamp": r.scan_date.timestamp(),
+            "Total": r.total_vulnerabilities,
+            "Critical": r.critical_count
+        })
 
-    df_reports = pd.DataFrame(report_data)  # This is the "Context" (Global for snapshot)
+    df = pd.DataFrame(history_data).sort_values('timestamp')
 
-    if df_reports.empty:
-        return {"meta": {"count": 0}, "message": "No scan data found."}
+    stability_score = 0
+    trend_direction = "Flat"
 
-    # 4. Handle Focus Filtering (The "Selected Target" Logic)
-    df_focus = df_reports.copy()
+    if len(df) > 1:
+        # Stability (CV)
+        mean = df['Total'].mean()
+        std = df['Total'].std()
+        cov = std / mean if mean > 0 else 0
+        stability_score = max(0, int(100 - (cov * 100)))
 
-    # If in SNAPSHOT mode and a target is selected, we create a 'focus' subset
-    # but keep 'df_reports' as the global set.
-    if mode == "snapshot" and target_domain and target_domain != 'all':
-        df_focus = df_reports[df_reports['target'].str.contains(target_domain, case=False, na=False)]
-        if df_focus.empty:
-            # If the selected target isn't in the snapshot (e.g. date range excluded it), return empty
-            return {"meta": {"count": 0}, "message": f"No data found for {target_domain} in this range."}
+        # Trend (Slope)
+        if len(df) >= 3:
+            slope, _ = np.polyfit(range(len(df)), df['Total'], 1)
+            if slope < -0.1:
+                trend_direction = "Decreasing"
+            elif slope > 0.1:
+                trend_direction = "Increasing"
 
-    # Get IDs for fetching vulnerabilities
-    focus_report_ids = df_focus['report_id'].tolist()  # For Severity Charts
-    global_report_ids = df_reports['report_id'].tolist()  # For Prevalence
+    # 4. SNAPSHOT ANALYSIS
+    latest_report = sorted(reports, key=lambda x: x.scan_date)[-1]
 
-    # 5. Fetch Vulnerabilities (Global Set)
-    vuln_data_global = []
-    if global_report_ids:
-        # Fetch in bulk
-        vuln_stmt = select(Vulnerability).where(Vulnerability.report_id.in_(global_report_ids))
-        vulnerabilities = session.scalars(vuln_stmt).all()
-        vuln_data_global = [{
-            "severity": v.severity.capitalize(),
-            "type": v.vulnerability_type,
-            "report_id": v.report_id
-        } for v in vulnerabilities]
+    # A. Severity Distribution
+    sev_counts = session.query(
+        Vulnerability.severity, func.count(Vulnerability.id)
+    ).filter(
+        Vulnerability.report_id == latest_report.id
+    ).group_by(Vulnerability.severity).all()
 
-    df_vulns_global = pd.DataFrame(vuln_data_global)
+    sev_map = {s.lower(): c for s, c in sev_counts}
 
-    # Create Focus Subset (For Charts)
-    if not df_vulns_global.empty:
-        df_vulns_focus = df_vulns_global[df_vulns_global['report_id'].isin(focus_report_ids)]
-    else:
-        df_vulns_focus = pd.DataFrame()
+    dist_data = [
+        {"name": "critical", "value": sev_map.get("critical", 0)},
+        {"name": "high", "value": sev_map.get("high", 0) + sev_map.get("error", 0)},
+        {"name": "medium", "value": sev_map.get("medium", 0) + sev_map.get("warning", 0)},
+        {"name": "low", "value": sev_map.get("low", 0) + sev_map.get("note", 0)},
+        {"name": "informational", "value": sev_map.get("informational", 0)}
+    ]
+    dist_data = [d for d in dist_data if d['value'] > 0]
 
-    # 6. Calculate Statistics
-    stats = {
-        "meta": {
-            "mode": mode,
-            "filter": target_domain or "all_targets",
-            "report_count": len(df_focus),
-            "total_findings": len(df_vulns_focus)
+    # B. Type Distribution (The Missing Piece)
+    type_counts = session.query(
+        Vulnerability.vulnerability_type,
+        Vulnerability.severity,
+        func.count(Vulnerability.id)
+    ).filter(
+        Vulnerability.report_id == latest_report.id
+    ).group_by(
+        Vulnerability.vulnerability_type, Vulnerability.severity
+    ).all()
+
+    type_map = {}
+    for v_type, severity, count in type_counts:
+        if v_type not in type_map:
+            type_map[v_type] = {"name": v_type, "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+
+        s_lower = severity.lower()
+        if s_lower == 'error': s_lower = 'high'
+        if s_lower == 'warning': s_lower = 'medium'
+        if s_lower == 'note': s_lower = 'low'
+
+        if s_lower in type_map[v_type]:
+            type_map[v_type][s_lower] += count
+        type_map[v_type]["total"] += count
+
+    top_types = sorted(type_map.values(), key=lambda x: x['total'], reverse=True)[:5]
+
+    return {
+        "kpi": {
+            "current_risk": latest_report.total_vulnerabilities,
+            "stability_score": stability_score,
+            "trend": trend_direction,
+            "scan_date": latest_report.scan_date.strftime("%Y-%m-%d")
         },
-        "findings_per_scan": {},
-        "severity_distribution": {},
-        "severity_type_distribution": [],
-        "prevalence": {},
-        "selected_target": None
-    }
-
-    # A. IQR Stats (Using GLOBAL Context)
-    # This ensures that even when viewing one target, you see the "Industry Spread"
-    if not df_reports.empty:
-        mean_val = float(df_reports["total_vulns"].mean())
-        std_dev = float(df_reports["total_vulns"].std()) if len(df_reports) > 1 else 0.0
-        q1 = float(df_reports["total_vulns"].quantile(0.25))
-        q3 = float(df_reports["total_vulns"].quantile(0.75))
-
-        stats["findings_per_scan"] = {
-            "mean": round(mean_val, 2),
-            "median": float(df_reports["total_vulns"].median()),
-            "std_dev": round(std_dev, 2),
-            "q1": round(q1, 2),
-            "q3": round(q3, 2),
-            "iqr": round(q3 - q1, 2),
-            "min": int(df_reports["total_vulns"].min()),
-            "max": int(df_reports["total_vulns"].max()),
-            "coefficient_of_variation": round((std_dev / mean_val) if mean_val > 0 else 0, 4)
+        "charts": {
+            "history": history_data,
+            "distribution": dist_data,
+            "types": top_types
         }
-
-    # B. Vulnerability Analysis (Using FOCUS Data)
-    # These charts should reflect the USER SELECTION (Specific Target)
-    if not df_vulns_focus.empty:
-        # 1. Severity Distribution
-        stats["severity_distribution"] = df_vulns_focus["severity"].value_counts().to_dict()
-
-        # 2. Severity by Type (Stacked)
-        top_types = df_vulns_focus["type"].value_counts().head(10).index.tolist()
-        subset = df_vulns_focus[df_vulns_focus["type"].isin(top_types)]
-
-        stacked_data = []
-        for v_type in top_types:
-            type_rows = subset[subset["type"] == v_type]
-            counts = type_rows["severity"].value_counts().to_dict()
-            entry = {
-                "type": v_type,
-                "Critical": counts.get("Critical", 0),
-                "High": counts.get("High", 0),
-                "Medium": counts.get("Medium", 0),
-                "Low": counts.get("Low", 0),
-                "Informational": counts.get("Informational", 0),
-                "total": len(type_rows)
-            }
-            stacked_data.append(entry)
-        stats["severity_type_distribution"] = stacked_data
-
-    # C. Prevalence (Using GLOBAL Data)
-    # Prevalence means "How common is this across ALL targets?"
-    if not df_vulns_global.empty:
-        total_targets = len(df_reports)
-        if total_targets > 0:
-            prevalence_series = df_vulns_global.groupby("type")["report_id"].nunique()
-            top_prevalence = prevalence_series.sort_values(ascending=False).head(10)
-            stats["prevalence"] = (top_prevalence / total_targets * 100).round(1).to_dict()
-
-    # D. Target Specific Metadata
-    if mode == "snapshot" and target_domain and target_domain != 'all':
-        if not df_focus.empty:
-            val = int(df_focus.iloc[0]['total_vulns'])
-            # Rank against global set
-            rank = df_reports['total_vulns'].rank(pct=True)[df_focus.index[0]] * 100
-            stats["selected_target"] = {
-                "total_vulns": val,
-                "rank_percentile": int(rank)
-            }
-
-    return stats
-
-
-# ... existing imports
-# Add these if missing:
-from sqlalchemy import desc
+    }
 
 
 def get_raw_vulnerabilities(
