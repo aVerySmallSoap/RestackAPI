@@ -16,6 +16,7 @@ def get_general_analytics(
 ) -> Dict[str, Any]:
     """
     Standardized Analytics Endpoint for Visualizations.
+    Updated to aggregate vulnerabilities by date (one point per day).
     """
 
     # 1. DATE FILTER LOGIC
@@ -24,113 +25,196 @@ def get_general_analytics(
             s_date = datetime.strptime(start_date, "%Y-%m-%d")
             e_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
             cutoff_filter = and_(Report.scan_date >= s_date, Report.scan_date < e_date)
+            days_analyzed = (datetime.strptime(end_date, "%Y-%m-%d") - s_date).days
         except ValueError:
             return {"error": "Invalid date format. Use YYYY-MM-DD"}
     else:
-        # Default 90 Days
-        cutoff_date = datetime.now() - timedelta(days=90)
+        # Default 30 Days
+        days_analyzed = 30
+        cutoff_date = datetime.now() - timedelta(days=30)
         cutoff_filter = Report.scan_date >= cutoff_date
 
-    # 2. FETCH HISTORY
-    stmt = select(Report).join(Scan, Report.id == Scan.report_id).where(cutoff_filter)
+    # 2. FETCH HISTORY WITH DAILY AGGREGATION
+    # Group by date and sum vulnerabilities found that day
+    stmt = (
+        select(
+            func.date(Report.scan_date).label('scan_date'),
+            func.sum(Report.total_vulnerabilities).label('total_vulns'),
+            func.sum(Report.critical_count).label('critical_vulns')
+        )
+        .join(Scan, Report.id == Scan.report_id)
+        .where(cutoff_filter)
+        .group_by(func.date(Report.scan_date))
+        .order_by(func.date(Report.scan_date))
+    )
 
     if target_domain and target_domain != 'all':
         stmt = stmt.where(Scan.target_url.ilike(f"%{target_domain}%"))
 
-    reports = session.scalars(stmt).unique().all()
+    # Execute aggregated query
+    daily_results = session.execute(stmt).all()
 
-    if not reports:
-        return {"error": "No data available"}
+    # Handle empty data gracefully
+    if not daily_results:
+        return {
+            "kpi": {
+                "target": target_domain if target_domain else "All Targets",
+                "total_scans": 0,
+                "total_vulns": 0,
+                "days_analyzed": days_analyzed,
+                "stability_score": 0,
+                "last_scan": None
+            },
+            "charts": {
+                "history": [],
+                "distribution": [],
+                "types": [],
+                "trend": []
+            }
+        }
 
-    # 3. STATISTICAL ANALYSIS (Stability & Trend)
+    # 3. PREPARE HISTORY DATA (aggregated by date)
     history_data = []
-    for r in reports:
+    for row in daily_results:
         history_data.append({
-            "date": r.scan_date.strftime("%Y-%m-%d"),
-            "timestamp": r.scan_date.timestamp(),
-            "Total": r.total_vulnerabilities,
-            "Critical": r.critical_count
+            "date": row.scan_date.strftime("%Y-%m-%d"),
+            "timestamp": datetime.combine(row.scan_date, datetime.min.time()).timestamp(),
+            "Total": int(row.total_vulns or 0),
+            "Critical": int(row.critical_vulns or 0)
         })
 
-    df = pd.DataFrame(history_data).sort_values('timestamp')
+    df = pd.DataFrame(history_data)
 
+    # 4. GET ALL REPORTS IN TIME RANGE FOR ACCURATE COUNTS
+    # Fetch all reports for the current filter to get accurate scan count and aggregated stats
+    all_reports_stmt = (
+        select(Report)
+        .join(Scan, Report.id == Scan.report_id)
+        .where(cutoff_filter)
+    )
+
+    if target_domain and target_domain != 'all':
+        all_reports_stmt = all_reports_stmt.where(Scan.target_url.ilike(f"%{target_domain}%"))
+
+    all_reports_stmt = all_reports_stmt.order_by(desc(Report.scan_date))
+    all_reports = session.scalars(all_reports_stmt).all()
+
+    # Get the latest report for "current state" reference
+    latest_report = all_reports[0] if all_reports else None
+
+    if not latest_report:
+        return {
+            "kpi": {
+                "target": target_domain if target_domain else "All Targets",
+                "total_scans": len(all_reports),
+                "total_vulns": int(df['Total'].iloc[-1]) if len(df) > 0 else 0,
+                "days_analyzed": days_analyzed,
+                "stability_score": 0,
+                "last_scan": df['date'].iloc[-1] if len(df) > 0 else None
+            },
+            "charts": {
+                "history": history_data,
+                "distribution": [],
+                "types": [],
+                "trend": []
+            }
+        }
+
+    # 7. STATISTICAL ANALYSIS (Stability & Trend)
+    total_scans = len(daily_results)
     stability_score = 0
-    trend_direction = "Flat"
+    trend_data = []
 
     if len(df) > 1:
-        # Stability (CV)
+        # Stability (Coefficient of Variation)
         mean = df['Total'].mean()
         std = df['Total'].std()
         cov = std / mean if mean > 0 else 0
         stability_score = max(0, int(100 - (cov * 100)))
 
-        # Trend (Slope)
-        if len(df) >= 3:
-            slope, _ = np.polyfit(range(len(df)), df['Total'], 1)
-            if slope < -0.1:
-                trend_direction = "Decreasing"
-            elif slope > 0.1:
-                trend_direction = "Increasing"
+        # Regression Line Calculation
+        x_vals = np.arange(len(df))
+        y_vals = df['Total'].values
 
-    # 4. SNAPSHOT ANALYSIS
-    latest_report = sorted(reports, key=lambda x: x.scan_date)[-1]
+        slope, intercept = np.polyfit(x_vals, y_vals, 1)
+        df['regression'] = (slope * x_vals) + intercept
 
-    # A. Severity Distribution
-    sev_counts = session.query(
-        Vulnerability.severity, func.count(Vulnerability.id)
-    ).filter(
-        Vulnerability.report_id == latest_report.id
-    ).group_by(Vulnerability.severity).all()
+        trend_df = df[['date', 'Total', 'regression']].rename(columns={'Total': 'value'})
+        trend_data = trend_df.to_dict(orient='records')
+    else:
+        stability_score = 100
+        trend_data = [{"date": r["date"], "value": r["Total"], "regression": r["Total"]} for r in history_data]
 
-    sev_map = {s.lower(): c for s, c in sev_counts}
+    # 6. SNAPSHOT ANALYSIS - AGGREGATED ACROSS ALL REPORTS IN TIME RANGE
+    # Instead of just the latest report, aggregate ALL reports in the filtered time range
 
-    dist_data = [
-        {"name": "critical", "value": sev_map.get("critical", 0)},
-        {"name": "high", "value": sev_map.get("high", 0) + sev_map.get("error", 0)},
-        {"name": "medium", "value": sev_map.get("medium", 0) + sev_map.get("warning", 0)},
-        {"name": "low", "value": sev_map.get("low", 0) + sev_map.get("note", 0)},
-        {"name": "informational", "value": sev_map.get("informational", 0)}
-    ]
-    dist_data = [d for d in dist_data if d['value'] > 0]
+    # A. Severity Distribution (from ALL reports in range)
+    all_report_ids = [r.id for r in all_reports]
 
-    # B. Type Distribution (The Missing Piece)
-    type_counts = session.query(
-        Vulnerability.vulnerability_type,
-        Vulnerability.severity,
-        func.count(Vulnerability.id)
-    ).filter(
-        Vulnerability.report_id == latest_report.id
-    ).group_by(
-        Vulnerability.vulnerability_type, Vulnerability.severity
-    ).all()
+    if not all_report_ids:
+        dist_data = []
+        top_types = []
+    else:
+        sev_counts = session.query(
+            Vulnerability.severity, func.count(Vulnerability.id)
+        ).filter(
+            Vulnerability.report_id.in_(all_report_ids)
+        ).group_by(Vulnerability.severity).all()
 
-    type_map = {}
-    for v_type, severity, count in type_counts:
-        if v_type not in type_map:
-            type_map[v_type] = {"name": v_type, "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+        sev_map = {s.lower(): c for s, c in sev_counts}
 
-        s_lower = severity.lower()
-        if s_lower == 'error': s_lower = 'high'
-        if s_lower == 'warning': s_lower = 'medium'
-        if s_lower == 'note': s_lower = 'low'
+        dist_data = [
+            {"name": "critical", "value": sev_map.get("critical", 0)},
+            {"name": "high", "value": sev_map.get("high", 0) + sev_map.get("error", 0)},
+            {"name": "medium", "value": sev_map.get("medium", 0) + sev_map.get("warning", 0)},
+            {"name": "low", "value": sev_map.get("low", 0) + sev_map.get("note", 0)},
+            {"name": "informational", "value": sev_map.get("informational", 0)}
+        ]
+        dist_data = [d for d in dist_data if d['value'] > 0]
 
-        if s_lower in type_map[v_type]:
-            type_map[v_type][s_lower] += count
-        type_map[v_type]["total"] += count
+        # B. Type Distribution (Top 5 by Count across ALL reports)
+        type_counts = session.query(
+            Vulnerability.vulnerability_type,
+            Vulnerability.severity,
+            func.count(Vulnerability.id)
+        ).filter(
+            Vulnerability.report_id.in_(all_report_ids)
+        ).group_by(
+            Vulnerability.vulnerability_type, Vulnerability.severity
+        ).all()
 
-    top_types = sorted(type_map.values(), key=lambda x: x['total'], reverse=True)[:5]
+        type_map = {}
+        for v_type, severity, count in type_counts:
+            clean_type = v_type.replace('_', ' ').replace('-', ' ').title()
+
+            if clean_type not in type_map:
+                type_map[clean_type] = {"name": clean_type, "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+
+            s_lower = severity.lower()
+            if s_lower == 'error': s_lower = 'high'
+            if s_lower == 'warning': s_lower = 'medium'
+            if s_lower == 'note': s_lower = 'low'
+
+            if s_lower in type_map[clean_type]:
+                type_map[clean_type][s_lower] += count
+            type_map[clean_type]["total"] += count
+
+        top_types = sorted(type_map.values(), key=lambda x: x['total'], reverse=True)[:5]
 
     return {
         "kpi": {
-            "current_risk": latest_report.total_vulnerabilities,
+            "target": target_domain if target_domain else "All Targets",
+            "total_scans": total_scans,
+            "total_vulns": latest_report.total_vulnerabilities,
+            "days_analyzed": days_analyzed,
             "stability_score": stability_score,
-            "trend": trend_direction,
-            "scan_date": latest_report.scan_date.strftime("%Y-%m-%d")
+            "last_scan": latest_report.scan_date.strftime("%Y-%m-%d")
         },
         "charts": {
             "history": history_data,
             "distribution": dist_data,
-            "types": top_types
+            "types": top_types,
+            "trend": trend_data
         }
     }
 
@@ -144,11 +228,7 @@ def get_raw_vulnerabilities(
 ) -> list[dict]:
     """
     Fetches a raw list of vulnerabilities with filters.
-    Limits to 1000 rows by default to prevent browser crashes on large datasets.
     """
-
-    # Base Query: Vuln -> Report -> Scan (to get Target URL)
-    # We use distinct() (no args) to deduplicate identical result rows caused by joins
     stmt = (
         select(
             Vulnerability.severity,
@@ -160,15 +240,12 @@ def get_raw_vulnerabilities(
         )
         .join(Report, Vulnerability.report_id == Report.id)
         .join(Scan, Report.id == Scan.report_id)
-        .distinct() # Changed from .distinct(Vulnerability.id) to fix Sort Error
+        .distinct()
         .order_by(desc(Vulnerability.scan_date))
         .limit(limit)
     )
 
-    # Apply Filters
     filters = []
-
-    # Date Filter
     if start_date and end_date:
         try:
             s_date = datetime.strptime(start_date, "%Y-%m-%d")
@@ -178,7 +255,6 @@ def get_raw_vulnerabilities(
         except ValueError:
             pass
 
-    # Target Filter
     if target_domain and target_domain != 'all':
         filters.append(Scan.target_url.ilike(f"%{target_domain}%"))
 
@@ -187,7 +263,6 @@ def get_raw_vulnerabilities(
 
     results = session.execute(stmt).all()
 
-    # Format for Frontend
     data = []
     for row in results:
         data.append({
