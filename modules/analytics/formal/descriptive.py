@@ -205,7 +205,8 @@ def get_general_analytics(
         "kpi": {
             "target": target_domain if target_domain else "All Targets",
             "total_scans": total_scans,
-            "total_vulns": latest_report.total_vulnerabilities,
+            "total_vulns": latest_report.total_vulnerabilities,  # Current state from latest scan
+            "total_vulns_all_time": sum(r.total_vulnerabilities for r in all_reports),  # Cumulative across all scans
             "days_analyzed": days_analyzed,
             "stability_score": stability_score,
             "last_scan": latest_report.scan_date.strftime("%Y-%m-%d")
