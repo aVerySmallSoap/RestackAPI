@@ -7,8 +7,9 @@ from loguru import logger
 import modules.utils.__utils__ as utilities
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
-from modules.scanners.WhatWebScanner import WhatWebAdapter
+from modules.scanners.discovery.WhatWebScanner import WhatWebAdapter
 from modules.scanners.ZapScanner import ZapScanner
+from modules.scanners.vulnerabilities.nuclei import NucleiAdapter
 from modules.utils.preinstances import scan_tracker
 
 
@@ -107,6 +108,23 @@ class ScannerManager:
                         "wapiti_config": wapiti_config
                     }
                 )
+
+            case ScannerType.NUCLEI:
+                nuclei_instance = config.get("nuclei_instance")
+
+                if nuclei_instance is None:
+                    logger.warning("No nuclei scanner instance detected, creating a new instance...")
+                    nuclei_instance = NucleiAdapter()
+
+                logger.info("Starting a nuclei scan...")
+                scan_tracker.advance_step(session, ScanStep.NUCLEI)
+                _nuclei_result = nuclei_instance.start_scan({
+                    "url": url,
+                    "session": session
+                })
+                return _nuclei_result, {}, {}
+
+
             case _:
                 # log
                 raise ValueError  # There is no valid argumentor match that was passed here

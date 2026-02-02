@@ -20,6 +20,7 @@ class ScannerType(Enum):
     ZAP = 2
     ZAP_AUTOMATION = 3  # Future feature
     FULL = 4
+    NUCLEI = 5
 
 
 class ScanType(Enum):
@@ -42,6 +43,7 @@ class ScanStep(Enum):
     ZAP         = "ZAP Scanning"
     WAPITI      = "Wapiti Scanning"
     WHATWEB     = "WhatWeb Scanning"
+    NUCLEI      = "Nuclei Scanning"
     QUERYVULNS  = "Querying Search_vulns"
     PARSING     = "Parsing"
     ANALYZING   = "Analyzing"

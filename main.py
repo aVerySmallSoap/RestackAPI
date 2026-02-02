@@ -28,7 +28,8 @@ from modules.db.database import Database
 from modules.db.table_collection import ScheduledScans, Scan
 from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
-from modules.scanners.WhatWebScanner import WhatWebAdapter
+from modules.scanners.discovery.WhatWebScanner import WhatWebAdapter
+from modules.scanners.vulnerabilities.nuclei import NucleiAdapter
 from modules.utils.__utils__ import check_directories, check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
 from services.FileReportGenerator import generate_excel, generate_pdf
@@ -76,7 +77,7 @@ app.add_middleware(
 
 class ScanRequest(BaseModel):
     url: AnyUrl
-    user_id: int | None = None # Add this field
+    # user_id: int | None = None # Add this field
     config: dict | None = None
 
 
@@ -196,7 +197,7 @@ async def zap_passive_scan(request: ScanRequest) -> dict:
             raw_whatweb_result,
             zap_result,
             scan_time,
-            _URL
+            _URL,
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
@@ -298,6 +299,7 @@ async def zap_full_scan(request: ScanRequest) -> dict:
 async def scan(request: ScanRequest) -> dict:
     """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with pre-defined configurations"""
     # Init
+    _nuclei_scanner = NucleiAdapter()
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
     time_start = time.perf_counter()
@@ -331,6 +333,15 @@ async def scan(request: ScanRequest) -> dict:
         scanner_type=ScannerType.WAPITI,
         wapiti_config=wapiti_config,
         scanner_instance=_wapiti_scanner
+    )
+
+    nuclei_result = await asyncio.to_thread(
+        run_start_scan,
+        scanner_manager,
+        _URL,
+        session,
+        scanner_type=ScannerType.NUCLEI,
+        scanner_instance=_nuclei_scanner
     )
 
     time_end = time.perf_counter()
@@ -370,9 +381,11 @@ async def scan(request: ScanRequest) -> dict:
             raw_whatweb_result,
             zap_result,
             wapiti_result,
+            nuclei_result,
             _results,
             scan_time,
-            _URL
+            _URL,
+            # user_id=request.user_id
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
@@ -394,9 +407,11 @@ async def scan(request: ScanRequest) -> dict:
             raw_whatweb_result["data"],
             zap_result,
             wapiti_result,
+            nuclei_result,
             _results,
             scan_time,
-            _URL
+            _URL,
+            # user_id=request.user_id
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {

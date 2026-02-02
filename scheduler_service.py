@@ -36,7 +36,7 @@ async def poll_for_schedule_changes(schedule_manager: ScheduleManager, scheduler
 
             # Fetch current schedules from database
             db_schedules = schedule_manager._fetch_schedules_from_db()
-            current_schedules = {s['id']: s for s in db_schedules}
+            current_schedules = {str(s['id']): s for s in db_schedules}
             current_ids = set(current_schedules.keys())
 
             # Get scheduler jobs

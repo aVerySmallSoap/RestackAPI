@@ -116,7 +116,7 @@ class Database:
             session.commit()
 
     def insert_scan_report(self, timestamp: datetime, plugins: list,
-                           zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):
+                           zap_raw_data: dict, wapiti_raw_data: dict, nuclei_raw_data: dict, analytics_data: dict, duration: float, url):
         engine = self._check_engine()
         _tables = []
         _zap_dump = json.dumps(zap_raw_data)
@@ -142,6 +142,7 @@ class Database:
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
+                # user_id=user_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="all",
                 scan_type="full scan",
@@ -155,6 +156,7 @@ class Database:
             session.add_all(_tables)
             self._insert_zap_vulnerabilities(report_id, timestamp, zap_raw_data, session)
             self._insert_wapiti_vulnerabilities(report_id, timestamp, wapiti_raw_data, session)
+            self._insert_nuclei_vulnerabilities(report_id, timestamp, nuclei_raw_data, session)
             session.commit()
 
     def insert_automated_report(self, timestamp: datetime, plugins: list,
@@ -197,6 +199,7 @@ class Database:
             session.add_all(_tables)
             self._insert_zap_vulnerabilities(report_id, timestamp, zap_raw_data, session)
             self._insert_wapiti_vulnerabilities(report_id, timestamp, wapiti_raw_data, session)
+            self._insert_nuclei_vulnerabilities(report_id, timestamp, nuclei_raw_data, session)
             session.commit()
 
     @staticmethod
@@ -261,6 +264,48 @@ class Database:
             _entries.append(_vuln)
         session.add_all(_entries)
 
+    @staticmethod
+    def _insert_nuclei_vulnerabilities(parent_report_id: str, scan_time: datetime, raw_data: dict, session: Session):
+        """Insert Nuclei vulnerabilities from SARIF format"""
+        if not raw_data or "runs" not in raw_data or not raw_data["runs"]:
+            return
+
+        _entries = []
+        _rules = utils.unroll_sarif_rules(raw_data)
+
+        for vulnerability in raw_data["runs"][0]["results"]:
+            _rule = _rules.get(vulnerability["ruleId"])
+            _json_dump = json.dumps(vulnerability)
+
+            _severity_map = {
+                "note": "Low",
+                "warning": "Medium",
+                "error": "High"
+            }
+            _severity = _severity_map.get(vulnerability.get("level", "note").lower(), "Low")
+
+            props = vulnerability.get("properties", {})
+
+            _vuln = Vulnerability(
+                id=str(uuid.uuid4()),
+                report_id=parent_report_id,
+                scan_date=scan_time.strftime("%Y-%m-%d %H:%M:%S"),
+                scanner="nuclei",
+                vulnerability_type=_rule.get("name", "Unknown"),
+                description=_rule.get("fullDescription", {}).get("text", "No description"),
+                severity=props.get("severity", _severity),
+                http_request=props.get("curl-command", None),
+                endpoint=vulnerability["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+                remediation_effort=_rule.get("help", {}).get("text", ""),
+                method="GET",
+                state="new",
+                confidence="Medium",
+                data=_json_dump
+            )
+            _entries.append(_vuln)
+        session.add_all(_entries)
+
+
     @property
     def engine(self):
         if self._engine is None:
@@ -283,3 +328,20 @@ class Database:
                 'raw_data': report.path  # path to SARIF file
             }
             return result
+
+    def delete_report(self, report_id: str) -> bool:
+        """Delete a report and its associated data from the database"""
+        engine = self._check_engine()
+        try:
+            with Session(engine) as session:
+                report = session.query(Report).filter(Report.id == report_id).first()
+                if report:
+                    # Dependencies (scans, vulnerabilities, etc.) should be handled by
+                    # database foreign key cascading if configured (ON DELETE CASCADE).
+                    session.delete(report)
+                    session.commit()
+                    return True
+                return False
+        except Exception as e:
+            print(f"Error deleting report: {e}")
+            return False

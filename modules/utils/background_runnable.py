@@ -10,6 +10,7 @@ from modules.analytics.vulnerability_analysis import analyze_results
 from modules.db.database import Database
 from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
+from modules.scanners.vulnerabilities.nuclei import NucleiAdapter
 from modules.utils.__utils__ import check_url_local_test, run_start_scan
 from modules.utils.load_configs import DEV_ENV
 from modules.utils.preinstances import scan_tracker
@@ -21,6 +22,8 @@ async def run_scheduled_scan(url):
     # Init
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
+
+    _nuclei_scanner = NucleiAdapter()
 
     local_scanner_manager = ScannerManager()
 
@@ -57,6 +60,15 @@ async def run_scheduled_scan(url):
         scanner_instance=_wapiti_scanner
     )
 
+    nuclei_result = await asyncio.to_thread(
+        run_start_scan,
+        local_scanner_manager,
+        _URL,
+        session_id,
+        scanner_type=ScannerType.NUCLEI,
+        scanner_instance=_nuclei_scanner
+    )
+
     # Analytics
     scan_tracker.advance_step(session_id, ScanStep.ANALYZING)
     _results = analyze_results(session_id, wapiti_result, zap_result, raw_whatweb_result, query_result)
@@ -86,6 +98,7 @@ async def run_scheduled_scan(url):
             raw_whatweb_result,
             zap_result,
             wapiti_result,
+            nuclei_result,
             _results,
             scan_time,
             _URL
@@ -110,6 +123,7 @@ async def run_scheduled_scan(url):
             raw_whatweb_result["data"],
             zap_result,
             wapiti_result,
+            nuclei_result,
             _results,
             scan_time,
             _URL
