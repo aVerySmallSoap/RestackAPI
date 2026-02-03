@@ -44,7 +44,8 @@ class ScheduleManager:
                         "type": row.job_type,
                         "config": row.configuration,
                         "url": row.url,
-                        "name": row.codename
+                        "name": row.codename,
+                        "user_id": row.user_id
                     }
                 )
             return _returnable
@@ -74,7 +75,7 @@ class ScheduleManager:
                     trigger=new_trigger,
                     id=job_id,
                     name=schedule["name"],
-                    args=[schedule["url"]],
+                    args=[schedule["url"], schedule["user_id"]],
                     replace_existing=True,
                     jobstore='default'
                 )

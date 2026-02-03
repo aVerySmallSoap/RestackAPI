@@ -65,7 +65,7 @@ async def poll_for_schedule_changes(schedule_manager: ScheduleManager, scheduler
                         trigger=trigger,
                         id=schedule_id,
                         name=schedule["name"],
-                        args=[schedule["url"]],
+                        args=[schedule["url"], schedule.get("user_id")],
                         replace_existing=False,
                         jobstore='default'
                     )
@@ -128,7 +128,7 @@ async def poll_for_schedule_changes(schedule_manager: ScheduleManager, scheduler
                                 schedule_id,
                                 jobstore='default',
                                 name=current_schedule["name"],
-                                args=[current_schedule["url"]]
+                                args=[current_schedule["url"], current_schedule.get("user_id")]
                             )
 
                             logger.success(f"✅ Updated schedule: {current_schedule['name']}")

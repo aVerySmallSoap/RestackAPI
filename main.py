@@ -77,7 +77,7 @@ app.add_middleware(
 
 class ScanRequest(BaseModel):
     url: AnyUrl
-        # user_id: int | None = None # Add this field
+    user_id: int | None = None
     config: dict | None = None
 
 
@@ -129,7 +129,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
             _whatweb_results["message"],
             result,
             scan_time,
-            _URL
+            _URL,
+            user_id=request.user_id
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
@@ -146,7 +147,8 @@ async def wapiti_scan(request: ScanRequest) -> dict:
             _whatweb_results["data"],
             result,
             scan_time,
-            _URL
+            _URL,
+            user_id=request.user_id
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
@@ -385,7 +387,7 @@ async def scan(request: ScanRequest) -> dict:
             _results,
             scan_time,
             _URL,
-            # user_id=request.user_id
+            user_id=request.user_id
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {
@@ -411,7 +413,7 @@ async def scan(request: ScanRequest) -> dict:
             _results,
             scan_time,
             _URL,
-            # user_id=request.user_id
+            user_id=request.user_id
         )
         scan_tracker.advance_step(session, ScanStep.SUCCESS)
         return {

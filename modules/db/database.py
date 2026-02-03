@@ -39,7 +39,7 @@ class Database:
         Base.metadata.create_all(engine)
 
     def insert_wapiti_quick_report(self, timestamp: datetime, plugins: list, raw_data: dict,
-                                   duration: float, url: str = "N/A"):
+                                   duration: float, url: str = "N/A", user_id: int = None):
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
@@ -62,6 +62,7 @@ class Database:
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
+                user_id=user_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="wapiti",
                 scan_type="wapiti scan",
@@ -116,7 +117,8 @@ class Database:
             session.commit()
 
     def insert_scan_report(self, timestamp: datetime, plugins: list,
-                           zap_raw_data: dict, wapiti_raw_data: dict, nuclei_raw_data: dict, analytics_data: dict, duration: float, url):
+                           zap_raw_data: dict, wapiti_raw_data: dict, nuclei_raw_data: dict,
+                           analytics_data: dict, duration: float, url, user_id: int = None):
         engine = self._check_engine()
         _tables = []
         _zap_dump = json.dumps(zap_raw_data)
@@ -142,7 +144,7 @@ class Database:
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
-                # user_id=user_id,
+                user_id=user_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="all",
                 scan_type="full scan",

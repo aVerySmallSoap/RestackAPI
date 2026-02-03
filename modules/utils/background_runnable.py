@@ -18,7 +18,7 @@ from services.managers.ScannerManager import ScannerManager
 
 database = Database()
 
-async def run_scheduled_scan(url):
+async def run_scheduled_scan(url, user_id=None):
     # Init
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
@@ -101,7 +101,8 @@ async def run_scheduled_scan(url):
             nuclei_result,
             _results,
             scan_time,
-            _URL
+            _URL,
+            user_id=user_id,
         )
     else:
         f = await aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w")

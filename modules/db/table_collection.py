@@ -72,6 +72,7 @@ class ScheduledScans(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True)
     url: Mapped[str] = mapped_column(String())
+    user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     codename: Mapped[str] = mapped_column(String(), unique=True)
     job_type: Mapped[str] = mapped_column(String())
     configuration: Mapped[JSON] = mapped_column(JSON())
