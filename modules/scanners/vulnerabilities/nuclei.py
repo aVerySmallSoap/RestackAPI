@@ -19,10 +19,11 @@ class NucleiAdapter(IScannerAdapter):
     # Nuclei severity → SARIF level
     _SEVERITY_LEVEL_MAP = {
         "critical": "error",
-        "high":     "error",
-        "medium":   "warning",
-        "low":      "note",
-        "info":     "note",
+        "high": "error",
+        "medium": "warning",
+        "low": "note",
+        "info": "note",
+        "unknown": "note"
     }
 
     # ---------------------------------------------------------------------------
@@ -32,30 +33,45 @@ class NucleiAdapter(IScannerAdapter):
     @logger.catch
     def start_scan(self, config: dict, **kwargs):
         """
-        Orchestration entry-point.  Mirrors the ZapScanner flow:
-            1. Spawn the Nuclei container
-            2. Wait for it to finish
-            3. Parse results into SARIF
-            4. Clean up the container and report file
+        Orchestration entry-point.
         """
         session = config.get("session")
-        target  = config.get("url")
+        target = config.get("url")
 
         logger.info("Spawning Nuclei container for session '{}'...", session)
         container = self._start_container(session, target)
 
         # Block until the container exits (Nuclei runs to completion and stops)
         logger.info("Waiting for Nuclei container to finish...")
-        result = container.wait()  # returns {"StatusCode": <int>}
+        result = container.wait()
         exit_code = result.get("StatusCode", -1)
 
+        # 1. Fetch logs BEFORE removing the container (optional, but good for debugging)
+        # Note: You can grab logs from a stopped container, but you cannot exec_run.
+        try:
+            logs = container.logs().decode('utf-8')
+            logger.debug("Nuclei container logs:\n{}", logs)
+        except Exception as e:
+            logger.warning("Could not retrieve logs: {}", e)
+
+        # 2. Check exit code
         if exit_code != 0:
             logger.error("Nuclei container exited with code {}. Aborting.", exit_code)
             container.remove()
-            return {}
+            return self._empty_sarif()
 
-        logger.info("Nuclei scan completed (exit code 0). Parsing results...")
-        _sarif = self.parse_results(session=session)
+        logger.info("Nuclei scan completed (exit code 0). Checking for report...")
+
+        # 3. Check for file on HOST (Local Disk), not inside container
+        # Because you used a bind mount, the file is already on your actual machine.
+        report_file = pathlib.Path(self._nuclei_base_path) / f"nuclei_{session}.json"
+
+        if report_file.exists():
+            logger.info(f"Report file found at: {report_file}")
+            _sarif = self.parse_results(session=session)
+        else:
+            logger.error(f"Report file NOT found at: {report_file}")
+            _sarif = self._empty_sarif()
 
         # Cleanup
         logger.debug("Cleaning up container and report file for '{}'...", session)
@@ -102,13 +118,22 @@ class NucleiAdapter(IScannerAdapter):
         print(report_path)
 
         logger.info("Parsing Nuclei results for session '{}'...", session)
+        logger.info("Looking for report at: {}", report_path)
+
+        if not report_path.exists():
+            logger.error("Nuclei report file does not exist: {}", report_path)
+            logger.error("Files in directory: {}", list(pathlib.Path(self._nuclei_base_path).glob("*")))
+            return self._empty_sarif()  # Return proper empty SARIF structure
+
         scan_tracker.advance_step(session, ScanStep.PARSING)
 
         try:
             findings = self._read_report(report_path)
+            logger.info("Successfully read {} findings from Nuclei report", len(findings))
         except Exception as e:
             logger.error("Failed to read Nuclei report: {}", e)
-            return {}
+            logger.exception(e)  # Log full stack trace
+            return self._empty_sarif()
 
         _sarif = {
             "version": "2.1.0",
@@ -125,13 +150,15 @@ class NucleiAdapter(IScannerAdapter):
             ]
         }
 
-        rules_seen      = set()             # templateIDs already added to rules[]
-        result_fingerprints = set()         # (templateID, endpoint) pairs seen
+        rules_seen = set()  # templateIDs already added to rules[]
+        result_fingerprints = set()  # (templateID, endpoint) pairs seen
 
         for finding in findings:
-            template_id = finding.get("templateID", "unknown")
-            matched_at  = finding.get("matched-at", "")
-            endpoint    = url_parser.urlparse(matched_at).path or matched_at
+            # FIX: Handle both 'template-id' (new) and 'templateID' (old)
+            template_id = finding.get("template-id") or finding.get("templateID") or "unknown"
+
+            matched_at = finding.get("matched-at", "")
+            endpoint = url_parser.urlparse(matched_at).path or matched_at
 
             # --- Deduplication (same rule on same endpoint) ---
             fingerprint = (template_id, endpoint)
@@ -140,7 +167,7 @@ class NucleiAdapter(IScannerAdapter):
                 continue
             result_fingerprints.add(fingerprint)
 
-            info     = finding.get("info", {})
+            info = finding.get("info", {})
             severity = (info.get("severity") or "info").lower()
 
             # --- Rule definition (added once per templateID) ---
@@ -175,15 +202,15 @@ class NucleiAdapter(IScannerAdapter):
                 "-u", target,
                 "-o", f"./tmp/nuclei/reports/nuclei_{session}.json",
                 # --- FILTERS ---
-                "-etags", "dos",                    # Exclude DoS (Crucial)
-                # "-es", "info",                    # Exclude 'Info' severity (Reduces noise)
+                "-etags", "dos",  # Exclude DoS (Crucial)
+                "-es", "info",                    # Exclude 'Info' severity (Reduces noise)
                 # --- OUTPUT ---
-                "-v", "-j",                         # Verbose + JSON output
+                "-v", "-j",  # Verbose + JSON output
                 # --- WAF EVASION & RATES ---
-                "-rate-limit", "15",
-                "-bulk-size", "5",
-                "-concurrency", "10",
-                "-timeout", "10",
+                "-rate-limit", "50",
+                "-bulk-size", "15",
+                "-concurrency", "25",
+                "-timeout", "5",
                 "-header",
                 "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
@@ -192,7 +219,7 @@ class NucleiAdapter(IScannerAdapter):
                 self._nuclei_base_path: {"bind": "/tmp/nuclei/reports", "mode": "rw"}
             },
             name=f"nuclei_{session}",
-            detach=True                             # Return immediately; we .wait() after
+            detach=True  # Return immediately; we .wait() after
         )
         return container
 
@@ -237,12 +264,7 @@ class NucleiAdapter(IScannerAdapter):
         Map a Nuclei finding's `info` block to a SARIF rule definition.
         """
         references = info.get("reference", []) or []
-        tags       = info.get("tags", []) or []
-
-        classifiers = {}                            # populated per-finding, not here
-        # CWE / OWASP come from the top-level `classifiers` key, but we put
-        # them in the rule `properties` using defaults here; the per-result
-        # properties carry the actual values from each finding.
+        tags = info.get("tags", []) or []
 
         return {
             "id": template_id,
@@ -265,12 +287,54 @@ class NucleiAdapter(IScannerAdapter):
         """
         Map a single Nuclei finding to a SARIF result entry.
         """
-        info        = finding.get("info", {})
-        classifiers = finding.get("classifiers", {})
+        info = finding.get("info", {})
+
+        # FIX: Extract classification from info.classification OR fallback to classifiers
+        classification = info.get("classification", {})
+        if not classification:
+            classification = finding.get("classifiers", {})  # older format fallback
+
+        cwe = classification.get("cwe-id", [])
+        if not cwe:
+            cwe = classification.get("cwe", [])  # older format fallback
+
+        cve = classification.get("cve-id", [])
+
+        # FIX: Build Properties to support Frontend expectations
+        props = {
+            "host": finding.get("host", ""),
+            "matched-at": finding.get("matched-at", ""),
+            "severity": severity,
+            "cwe": cwe,
+            "cve": cve,
+            "owasp": classification.get("owasp", []),
+            "tags": info.get("tags", []) or [],
+            "curl-command": finding.get("curl-command", ""),
+            "http_request": finding.get("request", ""),
+            "matcher_name": finding.get("matcher-name", ""),
+            "type": finding.get("type", "")
+        }
+
+        # FIX: Attach evidence
+        # 1. Try 'extracted-results' (payloads)
+        # 2. Try 'extracted' (older payloads)
+        # 3. Fallback to 'response' (if not too large) or 'matched-at'
+        extracted = finding.get("extracted-results", []) or finding.get("extracted", [])
+
+        if extracted:
+            props["evidence"] = "; ".join(extracted) if isinstance(extracted, list) else str(extracted)
+        else:
+            # For DNS or other non-payload findings, response usually contains the proof
+            # Only include if relatively small to avoid bloating the JSON
+            response = finding.get("response", "")
+            if response and len(response) < 4000:
+                props["evidence"] = response
+            else:
+                props["evidence"] = finding.get("matched-at", "")
 
         result = {
             "ruleId": template_id,
-            "level": self._SEVERITY_LEVEL_MAP.get(severity, "none"),
+            "level": self._SEVERITY_LEVEL_MAP.get(severity, "note"),
             "message": {
                 "text": info.get("name") or template_id
             },
@@ -283,20 +347,25 @@ class NucleiAdapter(IScannerAdapter):
                     }
                 }
             ],
-            "properties": {
-                "host":        finding.get("host", ""),
-                "matched-at":  finding.get("matched-at", ""),
-                "severity":    severity,
-                "cwe":         classifiers.get("cwe", []),
-                "owasp":       classifiers.get("owasp", []),
-                "tags":        info.get("tags", []) or [],
-                "curl-command": finding.get("curl-command", "")
-            }
+            "properties": props
         }
 
-        # Attach evidence if present (nuclei calls it "extracted")
-        extracted = finding.get("extracted", [])
-        if extracted:
-            result["properties"]["evidence"] = extracted
-
         return result
+
+    @staticmethod
+    def _empty_sarif() -> dict:
+        """Return a valid but empty SARIF structure"""
+        return {
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {
+                        "driver": {
+                            "name": "ProjectDiscovery Nuclei",
+                            "rules": []
+                        }
+                    },
+                    "results": []
+                }
+            ]
+        }

@@ -31,13 +31,20 @@ class ScanTracker:
             logger.error(f"Failed to add scan to tracker: {e}")
 
     def remove_scan(self, session_id: str):
-        """Remove a scan from the DB (Scan completed or failed)"""
+        """Remove a scan from the DB"""
         try:
             with Session(self._db.engine) as session:
-                statement = delete(ActiveScan).where(ActiveScan.session_id == session_id)
-                session.execute(statement)
-                session.commit()
-                logger.debug(f"Scan {session_id} removed from tracker.")
+                # Check if it exists first (for debugging)
+                exists = session.scalar(select(ActiveScan).where(ActiveScan.session_id == session_id))
+
+                if exists:
+                    statement = delete(ActiveScan).where(ActiveScan.session_id == session_id)
+                    session.execute(statement)
+                    session.commit()
+                    logger.success(f"Scan {session_id} successfully REMOVED from tracker.")
+                else:
+                    logger.warning(f"Attempted to remove scan {session_id}, but it was not in the tracker.")
+
         except Exception as e:
             logger.error(f"Failed to remove scan from tracker: {e}")
 
