@@ -72,10 +72,10 @@ class ScannerManager:
                 logger.info("Starting a whatweb query...")
                 scan_tracker.advance_step(session, ScanStep.WHATWEB)
                 _raw_whatweb_results, _query_results = await _whatweb_scanner.start_scan(url, session)
-                scan_tracker.advance_step(session, ScanStep.PARSING)
+
 
                 zap_scan_object = ZapScanner()
-                logger.info("Starting a zap scan in the backgroud...")
+                logger.info("Starting a zap scan in the background...")
                 scan_tracker.advance_step(session, ScanStep.ZAP)
                 _zap_result = zap_scan_object.start_scan(
                     {
@@ -87,7 +87,9 @@ class ScannerManager:
                         "scan_type": config.get("scan_type")
                     }
                 )
+                logger.info(f"[{session}] ZAP scan completed")
                 return _zap_result, _query_results, _raw_whatweb_results
+
             case ScannerType.WAPITI:
                 wapiti_instance = config.get("wapiti_instance")
                 wapiti_config = config.get("wapiti_config")
@@ -101,13 +103,18 @@ class ScannerManager:
                         "modules": ["all"]
                     })
 
-                return wapiti_instance.start_scan(
+                logger.info("Starting a wapiti scan...")
+                scan_tracker.advance_step(session, ScanStep.WAPITI)
+
+                result = wapiti_instance.start_scan(
                     {
                         "url": url,
                         "session": session,
                         "wapiti_config": wapiti_config
                     }
                 )
+                logger.info(f"[{session}] Wapiti scan completed")
+                return result
 
             case ScannerType.NUCLEI:
                 nuclei_instance = config.get("nuclei_instance")
@@ -122,12 +129,12 @@ class ScannerManager:
                     "url": url,
                     "session": session
                 })
+                logger.info(f"[{session}] Nuclei scan completed")
                 return _nuclei_result, {}, {}
-
 
             case _:
                 # log
-                raise ValueError  # There is no valid argumentor match that was passed here
+                raise ValueError  # There is no valid argument or match that was passed here
 
     def _run_start_scan(self, url: str, session: str, **config):
         return asyncio.run(self.start_scan(url, session, **config))
