@@ -232,6 +232,7 @@ def generate_pdf(report_id: str):
     """
     Generates a PDF report with overflow handling.
     """
+
     file_name = f"Restack_Report_{report_id}.pdf"
     output_path = os.path.join(DEV_ENV["report_paths"]["exports"], file_name)
 

@@ -88,6 +88,7 @@ class ScannerManager:
                     }
                 )
                 logger.info(f"[{session}] ZAP scan completed")
+                scan_tracker.advance_step(session, ScanStep.CLEANUP)
                 return _zap_result, _query_results, _raw_whatweb_results
 
             case ScannerType.WAPITI:
@@ -114,6 +115,7 @@ class ScannerManager:
                     }
                 )
                 logger.info(f"[{session}] Wapiti scan completed")
+                scan_tracker.advance_step(session, ScanStep.CLEANUP)
                 return result
 
             case ScannerType.NUCLEI:
@@ -130,6 +132,7 @@ class ScannerManager:
                     "session": session
                 })
                 logger.info(f"[{session}] Nuclei scan completed")
+                scan_tracker.advance_step(session, ScanStep.CLEANUP)
                 return _nuclei_result, {}, {}
 
             case _:

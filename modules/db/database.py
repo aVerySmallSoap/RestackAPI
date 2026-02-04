@@ -76,6 +76,7 @@ class Database:
             session.add_all(_tables)
             self._insert_wapiti_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
+            return report_id
 
     def insert_zap_report(self, timestamp: datetime, plugins: list, raw_data: dict, duration: float, url):
         engine = self._check_engine()
@@ -160,6 +161,7 @@ class Database:
             self._insert_wapiti_vulnerabilities(report_id, timestamp, wapiti_raw_data, session)
             self._insert_nuclei_vulnerabilities(report_id, timestamp, nuclei_raw_data, session)
             session.commit()
+            return report_id
 
     def insert_automated_report(self, timestamp: datetime, plugins: list,
                            zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):

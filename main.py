@@ -88,142 +88,47 @@ class ScheduleRequest(BaseModel):
     interval: dict
 
 
-@app.post("/api/v1/scan/")
-async def scan(request: ScanRequest) -> dict:
-    """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with pre-defined configurations"""
-    # Init
-    _nuclei_scanner = NucleiAdapter()
-    _wapiti_scanner = WapitiAdapter()
-    full_scan_path = DEV_ENV["report_paths"]["full_scan"]
+@app.post("/api/v1/wapiti/scan/quick")
+async def wapiti_scan(request: ScanRequest) -> dict:
     time_start = time.perf_counter()
     _scan_start = datetime.now()
-    _URL = check_url_local_test(str(request.url))
+    _wapiti_scanner = WapitiAdapter()
+    _whatweb_scanner = WhatWebAdapter()
     session = scan_tracker.generate_unique_session()
-    zap_config = scanner_manager.generate_random_config()
-    wapiti_config = _wapiti_scanner.generate_config(
-        {
-            "modules": ["all"]
-        }
-    )
-
+    _URL = check_url_local_test(str(request.url))
+    wapiti_config = _wapiti_scanner.generate_config({"modules": ["all"]})
     scan_tracker.add_scan(session, _URL, ScanStep.INIT)
 
-    zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
-        run_start_scan,
-        scanner_manager,
-        _URL,
-        session,
-        scanner_type=ScannerType.ZAP,
-        scan_type=ZAPScanType.FULL,
-        api_key=zap_config["api_key"],
-        port=zap_config["port"]
-    )
-
-    wapiti_result = await asyncio.to_thread(
-        run_start_scan,
-        scanner_manager,
-        _URL,
-        session,
-        scanner_type=ScannerType.WAPITI,
-        wapiti_config=wapiti_config,
+    result = await asyncio.to_thread(
+        run_start_scan, scanner_manager, _URL, session,
+        scanner_type=ScannerType.WAPITI, wapiti_config=wapiti_config,
         scanner_instance=_wapiti_scanner
     )
 
-    nuclei_result = await asyncio.to_thread(
-        run_start_scan,
-        scanner_manager,
-        _URL,
-        session,
-        scanner_type=ScannerType.NUCLEI,
-        scanner_instance=_nuclei_scanner
+    _whatweb_results, _query_results = await _whatweb_scanner.start_scan(_URL, session)
+    scan_tracker.advance_step(session, ScanStep.CLEANUP)
+    scan_time = time.perf_counter() - time_start
+
+    scan_tracker.advance_step(session, ScanStep.SAVING)
+
+    # Capture the report_id from the database insertion
+    report_id = _db.insert_wapiti_quick_report(
+        _scan_start,
+        _whatweb_results if _whatweb_results.__contains__("error") else _whatweb_results["data"],
+        result, scan_time, _URL,
+        user_id=request.user_id
     )
 
-    time_end = time.perf_counter()
-    scan_time = time_end - time_start
-
-    # Analytics
-    scan_tracker.advance_step(session, ScanStep.ANALYZING)
-    _results = analyze_results(session, wapiti_result, zap_result, nuclei_result, raw_whatweb_result, query_result)
-    summary_stats = generate_summary_stats(_results)
-    priority_matrix = create_priority_matrix(_results)
-    ai_summary = summarize_with_ai(session)
-
-    data = {
-        "session_id": session,
-        "data": _results,
+    scan_tracker.advance_step(session, ScanStep.SUCCESS)
+    return {
+        "id": report_id,  # This enables direct export
+        "data": result,
         "plugins": {
-            "fingerprinted": raw_whatweb_result,
-            "patchable": query_result
+            "fingerprinted": _whatweb_results if _whatweb_results.__contains__("error") else _whatweb_results["data"],
+            "patchable": _query_results
         },
-        "scan_time": scan_time,
-        "summary": {
-            "stats": summary_stats,
-            "matrix": priority_matrix,
-            "ai": ai_summary
-        }
+        "scan_time": scan_time
     }
-
-    # Save report in disk
-    scan_tracker.advance_step(session, ScanStep.SAVING)
-    f = await aiofiles.open(f"{full_scan_path}\\{session}.json", "w")
-    await f.write(json.dumps(data, indent=4))
-    await f.close()
-
-    # DB write
-    if query_result.__contains__("error"):
-        _db.insert_scan_report(
-            _scan_start,
-            raw_whatweb_result,
-            zap_result,
-            wapiti_result,
-            nuclei_result,
-            _results,
-            scan_time,
-            _URL,
-            user_id=request.user_id
-        )
-        scan_tracker.advance_step(session, ScanStep.SUCCESS)
-        return {
-            "session_id": session,
-            "data": _results,
-            "summary": {
-                "stats": summary_stats,
-                "matrix": priority_matrix,
-                "ai": ai_summary
-            },
-            "plugins": {
-                "fingerprinted": raw_whatweb_result,
-                "patchable": query_result["message"]
-            },
-            "scan_time": scan_time
-        }
-    else:
-        _db.insert_scan_report(
-            _scan_start,
-            raw_whatweb_result["data"],
-            zap_result,
-            wapiti_result,
-            nuclei_result,
-            _results,
-            scan_time,
-            _URL,
-            user_id=request.user_id
-        )
-        scan_tracker.advance_step(session, ScanStep.SUCCESS)
-        return {
-            "session_id": session,
-            "data": _results,
-            "summary": {
-                "stats": summary_stats,
-                "matrix": priority_matrix,
-                "ai": ai_summary
-            },
-            "plugins": {
-                "fingerprinted": raw_whatweb_result,
-                "patchable": query_result
-            },
-            "scan_time": scan_time
-        }
 
 
 @app.post("/api/v1/wapiti/scan/full")
@@ -364,8 +269,6 @@ async def zap_full_scan(request: ScanRequest) -> dict:
 
 @app.post("/api/v1/scan/")
 async def scan(request: ScanRequest) -> dict:
-    """Starts multiple scans using all WAV tools (Wapiti and Zap) and fingerprinting tools (WhatWeb and SearchVulns) with pre-defined configurations"""
-    # Init
     _nuclei_scanner = NucleiAdapter()
     _wapiti_scanner = WapitiAdapter()
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
@@ -374,53 +277,29 @@ async def scan(request: ScanRequest) -> dict:
     _URL = check_url_local_test(str(request.url))
     session = scan_tracker.generate_unique_session()
     zap_config = scanner_manager.generate_random_config()
-    wapiti_config = _wapiti_scanner.generate_config(
-        {
-            "modules": ["all"]
-        }
-    )
+    wapiti_config = _wapiti_scanner.generate_config({"modules": ["all"]})
     scan_tracker.add_scan(session, _URL, ScanStep.INIT)
 
-    # ZAP Scan
-    scan_tracker.advance_step(session, ScanStep.ZAP)  # ← ADD THIS
     zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
-        run_start_scan,
-        scanner_manager,
-        _URL,
-        session,
-        scanner_type=ScannerType.ZAP,
-        scan_type=ZAPScanType.FULL,
-        api_key=zap_config["api_key"],
-        port=zap_config["port"]
+        run_start_scan, scanner_manager, _URL, session,
+        scanner_type=ScannerType.ZAP, scan_type=ZAPScanType.FULL,
+        api_key=zap_config["api_key"], port=zap_config["port"]
     )
 
-    # Wapiti Scan
-    scan_tracker.advance_step(session, ScanStep.WAPITI)  # ← ADD THIS
     wapiti_result = await asyncio.to_thread(
-        run_start_scan,
-        scanner_manager,
-        _URL,
-        session,
-        scanner_type=ScannerType.WAPITI,
-        wapiti_config=wapiti_config,
+        run_start_scan, scanner_manager, _URL, session,
+        scanner_type=ScannerType.WAPITI, wapiti_config=wapiti_config,
         scanner_instance=_wapiti_scanner
     )
 
-    # Nuclei Scan
-    scan_tracker.advance_step(session, ScanStep.NUCLEI)  # ← ADD THIS
     nuclei_result = await asyncio.to_thread(
-        run_start_scan,
-        scanner_manager,
-        _URL,
-        session,
-        scanner_type=ScannerType.NUCLEI,
-        scanner_instance=_nuclei_scanner
+        run_start_scan, scanner_manager, _URL, session,
+        scanner_type=ScannerType.NUCLEI, scanner_instance=_nuclei_scanner
     )
 
     time_end = time.perf_counter()
     scan_time = time_end - time_start
 
-    # Analytics
     scan_tracker.advance_step(session, ScanStep.ANALYZING)
     _results = analyze_results(session, wapiti_result, zap_result, nuclei_result, raw_whatweb_result, query_result)
     summary_stats = generate_summary_stats(_results)
@@ -428,81 +307,35 @@ async def scan(request: ScanRequest) -> dict:
     ai_summary = summarize_with_ai(session)
 
     data = {
-        "session_id": session,  # ← ADD THIS to return session ID to frontend
         "data": _results,
-        "plugins": {
-            "fingerprinted": raw_whatweb_result,
-            "patchable": query_result
-        },
+        "plugins": {"fingerprinted": raw_whatweb_result, "patchable": query_result},
         "scan_time": scan_time,
-        "summary": {
-            "stats": summary_stats,
-            "matrix": priority_matrix,
-            "ai": ai_summary
-        }
+        "summary": {"stats": summary_stats, "matrix": priority_matrix, "ai": ai_summary}
     }
 
-    # Save report in disk
     scan_tracker.advance_step(session, ScanStep.SAVING)
-    f = await aiofiles.open(f"{full_scan_path}\\{session}.json", "w")
-    await f.write(json.dumps(data, indent=4))
-    await f.close()
+    async with aiofiles.open(f"{full_scan_path}\\{session}.json", "w") as f:
+        await f.write(json.dumps(data, indent=4))
 
-    # DB write
-    if query_result.__contains__("error"):
-        _db.insert_scan_report(
-            _scan_start,
-            raw_whatweb_result,
-            zap_result,
-            wapiti_result,
-            nuclei_result,
-            _results,
-            scan_time,
-            _URL,
-            user_id=request.user_id
-        )
-        scan_tracker.advance_step(session, ScanStep.SUCCESS)
-        return {
-            "session_id": session,  # ← ADD THIS
-            "data": _results,
-            "summary": {
-                "stats": summary_stats,
-                "matrix": priority_matrix,
-                "ai": ai_summary
-            },
-            "plugins": {
-                "fingerprinted": raw_whatweb_result,
-                "patchable": query_result["message"]
-            },
-            "scan_time": scan_time
-        }
-    else:
-        _db.insert_scan_report(
-            _scan_start,
-            raw_whatweb_result["data"],
-            zap_result,
-            wapiti_result,
-            nuclei_result,
-            _results,
-            scan_time,
-            _URL,
-            user_id=request.user_id
-        )
-        scan_tracker.advance_step(session, ScanStep.SUCCESS)
-        return {
-            "session_id": session,  # ← ADD THIS
-            "data": _results,
-            "summary": {
-                "stats": summary_stats,
-                "matrix": priority_matrix,
-                "ai": ai_summary
-            },
-            "plugins": {
-                "fingerprinted": raw_whatweb_result,
-                "patchable": query_result
-            },
-            "scan_time": scan_time
-        }
+    # Capture the report_id from the database insertion
+    report_id = _db.insert_scan_report(
+        _scan_start,
+        raw_whatweb_result if query_result.__contains__("error") else raw_whatweb_result["data"],
+        zap_result, wapiti_result, nuclei_result, _results, scan_time, _URL,
+        user_id=request.user_id
+    )
+
+    scan_tracker.advance_step(session, ScanStep.SUCCESS)
+    return {
+        "id": report_id, # This enables direct export
+        "data": _results,
+        "summary": {"stats": summary_stats, "matrix": priority_matrix, "ai": ai_summary},
+        "plugins": {
+            "fingerprinted": raw_whatweb_result,
+            "patchable": query_result if not query_result.__contains__("error") else query_result["message"]
+        },
+        "scan_time": scan_time
+    }
 
 
 @app.post("/api/v1/scan/full")
