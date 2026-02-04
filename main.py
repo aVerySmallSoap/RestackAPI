@@ -518,7 +518,8 @@ async def poll_data_summary(
 async def get_vulnerabilities_list(
     target: str = Query(None),
     start: str = Query(None),
-    end: str = Query(None)
+    end: str = Query(None),
+    user_id: int = Query(None)
 ):
     """
     Get raw vulnerability list for the data table
@@ -529,7 +530,8 @@ async def get_vulnerabilities_list(
                 session,
                 target_domain=target,
                 start_date=start,
-                end_date=end
+                end_date=end,
+                user_id=user_id
             )
     except Exception as e:
         logger.error(f"Failed to fetch vulnerability list: {e}")
@@ -537,9 +539,10 @@ async def get_vulnerabilities_list(
 
 @app.get("/api/v1/analytics/dashboard")
 async def get_dashboard_data(
-    target: str = Query(None, description="Filter by target domain"),
-    start: str = Query(None, description="YYYY-MM-DD"),
-    end: str = Query(None, description="YYYY-MM-DD")
+    target: str = Query(None),
+    start: str = Query(None),
+    end: str = Query(None),
+    user_id: int = Query(None) # <--- Add this
 ):
     try:
         with Session(_db.engine) as session:
@@ -547,7 +550,8 @@ async def get_dashboard_data(
                 session,
                 target_domain=target,
                 start_date=start,
-                end_date=end
+                end_date=end,
+                user_id=user_id
             )
     except Exception as e:
         logger.error(f"Analytics error: {e}")

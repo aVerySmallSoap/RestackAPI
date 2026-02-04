@@ -12,11 +12,12 @@ def get_general_analytics(
         session: Session,
         target_domain: Optional[str] = None,
         start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        end_date: Optional[str] = None,
+        user_id: Optional[int] = None  # <--- Ensure this is typed
 ) -> Dict[str, Any]:
     """
     Standardized Analytics Endpoint for Visualizations.
-    Updated to aggregate vulnerabilities by date (one point per day).
+    Aggregates vulnerabilities by date (one point per day), filtered by User.
     """
 
     # 1. DATE FILTER LOGIC
@@ -44,12 +45,16 @@ def get_general_analytics(
         )
         .join(Scan, Report.id == Scan.report_id)
         .where(cutoff_filter)
-        .group_by(func.date(Report.scan_date))
-        .order_by(func.date(Report.scan_date))
     )
+
+    # --- APPLY USER FILTER ---
+    if user_id is not None:
+        stmt = stmt.where(Scan.user_id == user_id)
 
     if target_domain and target_domain != 'all':
         stmt = stmt.where(Scan.target_url.ilike(f"%{target_domain}%"))
+
+    stmt = stmt.group_by(func.date(Report.scan_date)).order_by(func.date(Report.scan_date))
 
     # Execute aggregated query
     daily_results = session.execute(stmt).all()
@@ -92,6 +97,10 @@ def get_general_analytics(
         .join(Scan, Report.id == Scan.report_id)
         .where(cutoff_filter)
     )
+
+    # --- APPLY USER FILTER ---
+    if user_id is not None:
+        all_reports_stmt = all_reports_stmt.where(Scan.user_id == user_id)
 
     if target_domain and target_domain != 'all':
         all_reports_stmt = all_reports_stmt.where(Scan.target_url.ilike(f"%{target_domain}%"))
@@ -146,9 +155,7 @@ def get_general_analytics(
         trend_data = [{"date": r["date"], "value": r["Total"], "regression": r["Total"]} for r in history_data]
 
     # 6. SNAPSHOT ANALYSIS - AGGREGATED ACROSS ALL REPORTS IN TIME RANGE
-    # Instead of just the latest report, aggregate ALL reports in the filtered time range
-
-    # A. Severity Distribution (from ALL reports in range)
+    # Since 'all_reports' is already filtered by user_id above, we can safely use its IDs
     all_report_ids = [r.id for r in all_reports]
 
     if not all_report_ids:
@@ -172,7 +179,7 @@ def get_general_analytics(
         ]
         dist_data = [d for d in dist_data if d['value'] > 0]
 
-        # B. Type Distribution (Top 5 by Count across ALL reports)
+        # B. Type Distribution
         type_counts = session.query(
             Vulnerability.vulnerability_type,
             Vulnerability.severity,
@@ -205,8 +212,8 @@ def get_general_analytics(
         "kpi": {
             "target": target_domain if target_domain else "All Targets",
             "total_scans": total_scans,
-            "total_vulns": latest_report.total_vulnerabilities,  # Current state from latest scan
-            "total_vulns_all_time": sum(r.total_vulnerabilities for r in all_reports),  # Cumulative across all scans
+            "total_vulns": latest_report.total_vulnerabilities,
+            "total_vulns_all_time": sum(r.total_vulnerabilities for r in all_reports),
             "days_analyzed": days_analyzed,
             "stability_score": stability_score,
             "last_scan": latest_report.scan_date.strftime("%Y-%m-%d")
@@ -225,10 +232,11 @@ def get_raw_vulnerabilities(
         target_domain: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        limit: int = 1000
+        limit: int = 1000,
+        user_id: Optional[int] = None  # <--- Add param
 ) -> list[dict]:
     """
-    Fetches a raw list of vulnerabilities with filters.
+    Fetches a raw list of vulnerabilities with filters, scoped by User.
     """
     stmt = (
         select(
@@ -247,6 +255,11 @@ def get_raw_vulnerabilities(
     )
 
     filters = []
+
+    # --- APPLY USER FILTER ---
+    if user_id is not None:
+        filters.append(Scan.user_id == user_id)
+
     if start_date and end_date:
         try:
             s_date = datetime.strptime(start_date, "%Y-%m-%d")
@@ -263,7 +276,7 @@ def get_raw_vulnerabilities(
         stmt = stmt.where(and_(*filters))
 
     results = session.execute(stmt).all()
-
+    
     data = []
     for row in results:
         data.append({
