@@ -1,14 +1,20 @@
 {
   "templates_path": {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\config\\templates\\wapiti_config.json",
+    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\templates\\wapiti_config.json",
+    "active_scans": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\templates\\active_scan.json",
     "whatweb": "",
     "zap": ""
   },
-  "report_paths" : {
+  "report_paths": {
     "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\wapiti",
     "whatweb": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\whatweb",
     "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap",
     "searchVulns": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\search_vulns",
-    "full_scan": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\full_scan"
+    "full_scan": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\full_scan",
+    "subfinder": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\tmp\\discovery\\subfinder",
+    "nuclei": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\tmp\\vulnerabilities\\nuclei"
+  },
+  "api_keys": {
+    "gemini": "test_key"
   }
 }

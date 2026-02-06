@@ -1,156 +1,290 @@
 import asyncio
 import json
-import os.path
 import time
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 import aiofiles
-from modules.analytics.vulnerability_analysis import analyze_results
+from loguru import logger
+
+from modules.analytics.ai_recosum import summarize_with_ai
+from modules.analytics.vulnerability_analysis import analyze_results, generate_summary_stats, create_priority_matrix
 from modules.db.database import Database
-from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType
+from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, ScanStep
 from modules.scanners.WapitiScanner import WapitiAdapter
-from modules.scanners.WhatWebScanner import WhatWebAdapter
-from modules.scanners.ZapScanner import ZapAdapter
-from modules.utils.__utils__ import check_url_local_test
-from modules.utils.docker_utils import vuln_search_query, parse_query, start_automatic_zap_service
+from modules.scanners.discovery.WhatWebScanner import WhatWebAdapter
+from modules.scanners.vulnerabilities.nuclei import NucleiAdapter
+from modules.utils.__utils__ import check_url_local_test, run_start_scan, generate_random_uuid
 from modules.utils.load_configs import DEV_ENV
-from services.ScannerEngine import ScannerEngine
+from modules.utils.preinstances import scan_tracker
+from services.managers.ScannerManager import ScannerManager
 
-from zapv2 import ZAPv2
+database = Database()
 
-async def _start_automatic_scan(scanner_engine: ScannerEngine, url, database: Database):
-    print("Starting automatic scan")
+
+async def process_full_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None, is_automated: bool = False):
+    """
+    Universal full scan processor for both manual API calls and automated scheduler jobs.
+
+    Args:
+        url: Target URL to scan
+        user_id: Optional user ID for tracking
+        session_id: Optional session ID (generated if not provided)
+        config: Optional scan configuration
+
+    Returns:
+        dict: Scan results with session_id
+    """
+    # Initialize scanners
+    _wapiti_scanner = WapitiAdapter()
+    _nuclei_scanner = NucleiAdapter()
+    local_scanner_manager = ScannerManager()
+    full_scan_path = DEV_ENV["report_paths"]["full_scan"]
+
+    # Generate session ID if not provided
+    if not session_id:
+        session_id = generate_random_uuid()
+        logger.info(f"Generated new session ID: {session_id}")
+
     time_start = time.perf_counter()
-    # init
     _scan_start = datetime.now()
-    _whatweb_scanner = WhatWebAdapter()
-    scanner_engine.enqueue_session(ScannerType.FULL, _scan_start)
-    session_name = scanner_engine.dequeue_name()  # Get the latest time session and use it as the file name
-    _zap_path = f"{DEV_ENV['report_paths']['zap']}\\{session_name}.json"
-    _wapiti_path = f"{DEV_ENV['report_paths']['wapiti']}\\{session_name}.json"
-    _whatweb_path = f"{DEV_ENV['report_paths']['whatweb']}\\{session_name}.json"
-    _full_scan_path = f"{DEV_ENV['report_paths']['full_scan']}\\{session_name}.json"
-
-    # Generate config dictionaries
-    _wapiti_config_generator = WapitiAdapter()
-    config = _wapiti_config_generator.generate_config(
-        {
-            "path": _wapiti_path,
-            "modules": ["all"]
-        }
-    )
-
-    # WhatWeb scan
     _URL = check_url_local_test(str(url))
-    await _whatweb_scanner.start_automatic_scan(_URL, session_name)
-    _whatweb_result = _whatweb_scanner.parse_results(_whatweb_path)
 
-    _zap_result, _wapiti_result, _query_result, _results = await asyncio.to_thread(
-        _run_blocking_scans_and_analysis,
-        url,
-        session_name,
-        _zap_path,
-        _wapiti_path,
-        _whatweb_result,
-        config
-    )
+    # Generate configurations
+    zap_config = local_scanner_manager.generate_random_config()
+    wapiti_config = _wapiti_scanner.generate_config({"modules": ["all"]})
 
-    time_end = time.perf_counter()
-    scan_time = time_end - time_start
+    # Initialize tracking
+    scan_tracker.add_scan(session_id, _URL, ScanStep.INIT)
 
-    # Save report in disk
-    f = await aiofiles.open(_full_scan_path, "w")
-    await f.write(json.dumps(
-        {
+    try:
+        # Run ZAP scan
+        logger.info(f"[{session_id}] Starting ZAP full scan...")
+        zap_result, query_result, raw_whatweb_result = await asyncio.to_thread(
+            run_start_scan,
+            local_scanner_manager,
+            _URL,
+            session_id,
+            scanner_type=ScannerType.ZAP,
+            scan_type=ZAPScanType.FULL,
+            api_key=zap_config["api_key"],
+            port=zap_config["port"]
+        )
+
+        # Run Wapiti scan
+        logger.info(f"[{session_id}] Starting Wapiti scan...")
+        wapiti_result = await asyncio.to_thread(
+            run_start_scan,
+            local_scanner_manager,
+            _URL,
+            session_id,
+            scanner_type=ScannerType.WAPITI,
+            wapiti_config=wapiti_config,
+            scanner_instance=_wapiti_scanner
+        )
+
+        # Run Nuclei scan
+        logger.info(f"[{session_id}] Starting Nuclei scan...")
+        nuclei_result = await asyncio.to_thread(
+            run_start_scan,
+            local_scanner_manager,
+            _URL,
+            session_id,
+            scanner_type=ScannerType.NUCLEI,
+            scanner_instance=_nuclei_scanner
+        )
+
+        # Calculate scan time
+        time_end = time.perf_counter()
+        scan_time = time_end - time_start
+
+        # Analyze results
+        logger.info(f"[{session_id}] Analyzing results...")
+        scan_tracker.advance_step(session_id, ScanStep.ANALYZING)
+        _results = analyze_results(session_id, wapiti_result, zap_result, nuclei_result, raw_whatweb_result,
+                                   query_result)
+        summary_stats = generate_summary_stats(_results)
+        priority_matrix = create_priority_matrix(_results)
+        ai_summary = summarize_with_ai(session_id)
+
+        # Prepare response data
+        data = {
+            "session_id": session_id,
             "data": _results,
             "plugins": {
-                "fingerprinted": _whatweb_result["data"],
-                "patchable": _query_result
+                "fingerprinted": raw_whatweb_result,
+                "patchable": query_result if not query_result.get("error") else query_result.get("message")
             },
-            "scan_time": scan_time
-        },
-        indent=4)
-    )
-    await f.close()
+            "scan_time": scan_time,
+            "summary": {
+                "stats": summary_stats,
+                "matrix": priority_matrix,
+                "ai": ai_summary
+            }
+        }
 
-    # DB write
-    if _whatweb_result.__contains__("error"):
-        await asyncio.to_thread(
-            database.insert_scan_report,
+        # Save to disk
+        logger.info(f"[{session_id}] Saving results to disk...")
+        scan_tracker.advance_step(session_id, ScanStep.SAVING)
+        async with aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w") as f:
+            await f.write(json.dumps(data, indent=4))
+
+        # Save to database
+        report_id = database.insert_scan_report(
             _scan_start,
-            _full_scan_path,
-            _whatweb_result["message"],
-            _zap_result,
-            _wapiti_result,
+            raw_whatweb_result if query_result.get("error") else raw_whatweb_result.get("data", raw_whatweb_result),
+            zap_result,
+            wapiti_result,
+            nuclei_result,
             _results,
             scan_time,
-            _URL
-        )
-    else:
-        await asyncio.to_thread(
-            database.insert_scan_report,
-            _scan_start,
-            _full_scan_path,
-            _whatweb_result["data"],
-            _zap_result,
-            _wapiti_result,
-            _results,
-            scan_time,
-            _URL
+            _URL,
+            user_id=user_id,
+            summary_stats=summary_stats,
+            priority_matrix=priority_matrix,
+            ai_summary=ai_summary,
+            is_automated = is_automated
         )
 
-def _run_blocking_scans_and_analysis(url, session_name, zap_path, wapiti_path, whatweb_results, config):
-    _zap_scanner = ZapAdapter({"apikey": "test"})
+        data["id"] = report_id
+
+        # Update final status
+        scan_tracker.advance_step(session_id, ScanStep.SUCCESS)
+        logger.success(f"[{session_id}] Full scan completed successfully. Report ID: {report_id}")
+
+        return data
+
+    except Exception as e:
+        logger.error(f"[{session_id}] Full scan failed: {e}")
+        scan_tracker.advance_step(session_id, ScanStep.FAILED)
+
+        # Save error state to disk
+        error_data = {
+            "session_id": session_id,
+            "error": str(e),
+            "status": "failed"
+        }
+        async with aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w") as f:
+            await f.write(json.dumps(error_data, indent=4))
+
+        raise
+
+
+async def process_quick_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None, is_automated: bool = False, ):
+    """
+    Universal quick scan (Wapiti only) processor for both manual API calls and automated jobs.
+
+    Args:
+        url: Target URL to scan
+        user_id: Optional user ID for tracking
+        session_id: Optional session ID (generated if not provided)
+        config: Optional scan configuration
+
+    Returns:
+        dict: Scan results with session_id
+    """
+    # Initialize scanners
     _wapiti_scanner = WapitiAdapter()
+    _whatweb_scanner = WhatWebAdapter()
+    local_scanner_manager = ScannerManager()
+    quick_scan_path = DEV_ENV["report_paths"].get("quick_scan", DEV_ENV["report_paths"]["full_scan"])
+
+    # Generate session ID if not provided
+    if not session_id:
+        session_id = generate_random_uuid()
+        logger.info(f"Generated new session ID: {session_id}")
+
+    time_start = time.perf_counter()
+    _scan_start = datetime.now()
     _URL = check_url_local_test(str(url))
 
-    # Zap scan
-    api_key = 'test'
-    port=9100
-    container = start_automatic_zap_service({"port": port, "apikey": api_key, "session_name": session_name})
-    auto_zap = ZAPv2(
-        apikey=api_key,
-        proxies={
-            "http": f"127.0.0.1:{port}",
-            "https": f"127.0.0.1:{port}"
+    # Generate configuration
+    wapiti_config = _wapiti_scanner.generate_config({"modules": ["all"]})
+
+    # Initialize tracking
+    scan_tracker.add_scan(session_id, _URL, ScanStep.INIT)
+
+    try:
+        # Run Wapiti scan
+        logger.info(f"[{session_id}] Starting Wapiti quick scan...")
+        result = await asyncio.to_thread(
+            run_start_scan,
+            local_scanner_manager,
+            _URL,
+            session_id,
+            scanner_type=ScannerType.WAPITI,
+            wapiti_config=wapiti_config,
+            scanner_instance=_wapiti_scanner
+        )
+
+        # Run WhatWeb scan
+        logger.info(f"[{session_id}] Starting WhatWeb scan...")
+        scan_tracker.advance_step(session_id, ScanStep.WHATWEB)
+        _whatweb_results, _query_results = await _whatweb_scanner.start_scan(_URL, session_id)
+
+        scan_tracker.advance_step(session_id, ScanStep.CLEANUP)
+        scan_time = time.perf_counter() - time_start
+
+        # Prepare response data
+        data = {
+            "session_id": session_id,
+            "data": result,
+            "plugins": {
+                "fingerprinted": _whatweb_results if _whatweb_results.get("error") else _whatweb_results.get("data"),
+                "patchable": _query_results
+            },
+            "scan_time": scan_time
         }
-    )
-    _zap_scanner.start_scan(
-        _URL,
-        {
-            "path": zap_path,
-            "scan_type": ZAPScanType.AUTOMATIC,
-            "apikey": api_key,
-            "port": port,
-            "session_name": session_name,
-            "client_instance": auto_zap
+
+        # Save to disk
+        logger.info(f"[{session_id}] Saving results to disk...")
+        scan_tracker.advance_step(session_id, ScanStep.SAVING)
+        async with aiofiles.open(f"{quick_scan_path}\\{session_id}.json", "w") as f:
+            await f.write(json.dumps(data, indent=4))
+
+        # Save to database
+        report_id = database.insert_wapiti_quick_report(
+            _scan_start,
+            _whatweb_results if _whatweb_results.get("error") else _whatweb_results.get("data"),
+            result,
+            scan_time,
+            _URL,
+            user_id=user_id,
+            is_automated=is_automated
+        )
+
+        data["id"] = report_id
+
+        # Update final status
+        scan_tracker.advance_step(session_id, ScanStep.SUCCESS)
+        logger.success(f"[{session_id}] Quick scan completed successfully. Report ID: {report_id}")
+
+        return data
+
+    except Exception as e:
+        logger.error(f"[{session_id}] Quick scan failed: {e}")
+        scan_tracker.advance_step(session_id, ScanStep.FAILED)
+
+        # Save error state to disk
+        error_data = {
+            "session_id": session_id,
+            "error": str(e),
+            "status": "failed"
         }
-    )
-    _zap_result = _zap_scanner.parse_results(zap_path, auto_zap)
+        async with aiofiles.open(f"{quick_scan_path}\\{session_id}.json", "w") as f:
+            await f.write(json.dumps(error_data, indent=4))
 
-    # Wapiti scan
-    _wapiti_scanner.start_automatic_scan(_URL, config)
-    _wapiti_result = _wapiti_scanner.parse_results(wapiti_path)
-
-    _query_results: dict|None = None
-    if whatweb_results.__contains__("error"):
-        _query_results = None
-    elif len(whatweb_results["data"][0]) > 0 or whatweb_results["data"][0] is not None:
-        has_results = vuln_search_query(whatweb_results["data"][0], session_name)
-        if has_results:
-            _query_results = parse_query(session_name)
-    else:
-        _query_results = None
-
-    _results = analyze_results(session_name, _wapiti_result, _zap_result)
-
-    # Clean-up
-    container.stop()
-    container.remove()
-    if os.path.exists(f"{zap_path}\\{session_name}"):
-        os.rmdir(f"{zap_path}\\{session_name}")
-    return _zap_result, _wapiti_result, _query_results, _results
+        raise
 
 
-async def scheduled_scan(scanner_engine, request, database):
-    await _start_automatic_scan(scanner_engine, request, database)
+# Legacy function for backward compatibility with scheduler
+async def run_scheduled_scan(url: str, user_id=None):
+    """
+    Legacy wrapper for scheduled scans. Calls the new centralized function.
+    """
+    logger.info(f"Starting scheduled full scan for {url}")
+    try:
+        await process_full_scan_job(url, user_id=user_id, is_automated=True)
+        logger.success(f"Scheduled scan completed for {url}")
+    except Exception as e:
+        logger.error(f"Scheduled scan failed for {url}: {e}")

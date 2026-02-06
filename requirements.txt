@@ -17,3 +17,8 @@ google-genai
 aiofiles
 loguru
 reportlab
+websockets
+gunicorn
+uvicorn[standard]
+statsmodels
+scikit-learn
