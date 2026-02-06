@@ -83,6 +83,7 @@ class ScanTracker:
                 if scan:
                     scan.step = step.value
                     session.commit()
+                    logger.debug(f"Scan {session_id} advanced to step: {step.value}")
         except Exception as e:
             logger.error(f"Failed to advance step for {session_id}: {e}")
 
