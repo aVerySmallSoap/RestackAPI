@@ -41,7 +41,7 @@ class Database:
         Base.metadata.create_all(engine)
 
     def insert_wapiti_quick_report(self, timestamp: datetime, plugins: list, raw_data: dict,
-                                   duration: float, url: str = "N/A", user_id: int = None):
+                                   duration: float, url: str = "N/A", user_id: int = None, is_automated=False):
         engine = self._check_engine()
         _tables = []
         with Session(engine) as session:
@@ -65,6 +65,7 @@ class Database:
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 user_id=user_id,
+                is_automated= is_automated,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="wapiti",
                 scan_type="wapiti scan",
@@ -125,7 +126,7 @@ class Database:
     def insert_scan_report(self, timestamp: datetime, plugins: list,
                            zap_raw_data: dict, wapiti_raw_data: dict, nuclei_raw_data: dict,
                            analytics_data: dict, duration: float, url, user_id: int = None,
-                           summary_stats: dict = None, priority_matrix: dict = None, ai_summary: dict = None):
+                           summary_stats: dict = None, priority_matrix: dict = None, ai_summary: dict = None, is_automated=False):
         engine = self._check_engine()
         _tables = []
         _zap_dump = json.dumps(zap_raw_data)
@@ -182,6 +183,7 @@ class Database:
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 user_id=user_id,
+                is_automated = is_automated,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="all",
                 scan_type="full scan",
@@ -209,7 +211,7 @@ class Database:
         _plugins_dump = json.dumps(plugins)
         total_union = sum(len(scanner_results) for scanner_results in analytics_data["union"])
         total_intersection = len(analytics_data.get("intersection", []))
-        total_vulnerabilities = total_union + total_intersection
+        total_vulnerabilities = total_union
         with Session(engine) as session:
             report_id = str(uuid.uuid4())
             report = Report(

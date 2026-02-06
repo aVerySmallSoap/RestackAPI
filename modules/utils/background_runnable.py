@@ -22,7 +22,7 @@ from services.managers.ScannerManager import ScannerManager
 database = Database()
 
 
-async def process_full_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None):
+async def process_full_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None, is_automated: bool = False):
     """
     Universal full scan processor for both manual API calls and automated scheduler jobs.
 
@@ -142,7 +142,8 @@ async def process_full_scan_job(url: str, user_id: int = None, session_id: str =
             user_id=user_id,
             summary_stats=summary_stats,
             priority_matrix=priority_matrix,
-            ai_summary=ai_summary
+            ai_summary=ai_summary,
+            is_automated = is_automated
         )
 
         data["id"] = report_id
@@ -169,7 +170,7 @@ async def process_full_scan_job(url: str, user_id: int = None, session_id: str =
         raise
 
 
-async def process_quick_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None):
+async def process_quick_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None, is_automated: bool = False, ):
     """
     Universal quick scan (Wapiti only) processor for both manual API calls and automated jobs.
 
@@ -248,7 +249,8 @@ async def process_quick_scan_job(url: str, user_id: int = None, session_id: str 
             result,
             scan_time,
             _URL,
-            user_id=user_id
+            user_id=user_id,
+            is_automated=is_automated
         )
 
         data["id"] = report_id
@@ -282,7 +284,7 @@ async def run_scheduled_scan(url: str, user_id=None):
     """
     logger.info(f"Starting scheduled full scan for {url}")
     try:
-        await process_full_scan_job(url, user_id=user_id)
+        await process_full_scan_job(url, user_id=user_id, is_automated=True)
         logger.success(f"Scheduled scan completed for {url}")
     except Exception as e:
         logger.error(f"Scheduled scan failed for {url}: {e}")
