@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, ForeignKey, JSON
+from sqlalchemy import String, ForeignKey, JSON, Text
 from sqlalchemy.orm import Mapped, relationship
 from sqlalchemy.testing.schema import mapped_column
 from sqlalchemy import BigInteger
@@ -18,6 +18,24 @@ class Report(Base):
     scan_type: Mapped[str] = mapped_column(String(50))
     total_vulnerabilities: Mapped[int]
     critical_count: Mapped[int]
+
+    # NEW: Analytics Data
+    ai_summary_vulnerabilities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_summary_tech: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Priority Matrix Quadrants
+    high_severity_high_confidence: Mapped[int] = mapped_column(default=0)
+    high_severity_low_confidence: Mapped[int] = mapped_column(default=0)
+    low_severity_high_confidence: Mapped[int] = mapped_column(default=0)
+    low_severity_low_confidence: Mapped[int] = mapped_column(default=0)
+
+    # Summary Statistics
+    scanner_agreement_rate: Mapped[Optional[float]] = mapped_column(nullable=True)
+    confidence_rate: Mapped[Optional[float]] = mapped_column(nullable=True)
+    high_confidence_vulns: Mapped[int] = mapped_column(default=0)
+    medium_confidence_vulns: Mapped[int] = mapped_column(default=0)
+    low_confidence_vulns: Mapped[int] = mapped_column(default=0)
+
     scan = relationship("Scan", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
     tech = relationship("TechDiscovery", back_populates="parent", cascade="all, delete-orphan", passive_deletes=True)
 
@@ -77,6 +95,7 @@ class ScheduledScans(Base):
     job_type: Mapped[str] = mapped_column(String())
     configuration: Mapped[JSON] = mapped_column(JSON())
 
+
 class ActiveScan(Base):
     """
     Temporary table to track running scans across multiple Uvicorn workers.
@@ -87,4 +106,4 @@ class ActiveScan(Base):
     session_id: Mapped[str] = mapped_column(String, primary_key=True)
     target: Mapped[str] = mapped_column(String)
     step: Mapped[str] = mapped_column(String)
-    start_time: Mapped[str] = mapped_column(String) # Optional: track when it started
+    start_time: Mapped[str] = mapped_column(String)

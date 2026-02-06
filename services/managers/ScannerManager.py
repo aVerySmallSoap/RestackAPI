@@ -111,7 +111,7 @@ class ScannerManager:
                     {
                         "url": url,
                         "session": session,
-                        "wapiti_config": wapiti_config
+                        "wapiti_config": wapiti_config.get("modules", ["all"])
                     }
                 )
                 logger.info(f"[{session}] Wapiti scan completed")

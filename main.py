@@ -318,11 +318,15 @@ async def scan(request: ScanRequest) -> dict:
         await f.write(json.dumps(data, indent=4))
 
     # Capture the report_id from the database insertion
+    # NOW PASS PRE-COMPUTED ANALYTICS
     report_id = _db.insert_scan_report(
         _scan_start,
         raw_whatweb_result if query_result.__contains__("error") else raw_whatweb_result["data"],
         zap_result, wapiti_result, nuclei_result, _results, scan_time, _URL,
-        user_id=request.user_id
+        user_id=request.user_id,
+        summary_stats=summary_stats,
+        priority_matrix=priority_matrix,
+        ai_summary=ai_summary
     )
 
     scan_tracker.advance_step(session, ScanStep.SUCCESS)

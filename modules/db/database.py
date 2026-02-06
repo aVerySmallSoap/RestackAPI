@@ -11,11 +11,13 @@ from sqlalchemy_utils import database_exists, create_database
 import modules.utils.__utils__ as utils
 from modules.db.session import Base
 from modules.db.table_collection import Report, TechDiscovery, Scan, Vulnerability
+from modules.analytics.analytics_helper import compute_and_attach_analytics
+from loguru import logger
 
 
 class Database:
     _engine = None
-    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack"  # TODO: Change to ENV when deploying
+    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack"
 
     def __int__(self):
         pass
@@ -78,7 +80,8 @@ class Database:
             session.commit()
             return report_id
 
-    def insert_zap_report(self, timestamp: datetime, plugins: list, raw_data: dict, duration: float, url):
+    def insert_zap_report(self, timestamp: datetime, plugins: list, raw_data: dict, duration: float, url,
+                          user_id: int = None):
         engine = self._check_engine()
         _tables = []
         _data_dump = json.dumps(raw_data)
@@ -103,11 +106,12 @@ class Database:
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
+                user_id=user_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scanner="zap",
                 scan_type="zap scan",
                 data=_data_dump,
-                crawl_depth=0,  # TODO: fetch crawler results and add data here
+                crawl_depth=0,
                 scan_duration=floor(duration),
                 target_url=url
             )
@@ -116,15 +120,20 @@ class Database:
             session.add_all(_tables)
             self._insert_zap_vulnerabilities(report_id, timestamp, raw_data, session)
             session.commit()
+            return report_id
 
     def insert_scan_report(self, timestamp: datetime, plugins: list,
                            zap_raw_data: dict, wapiti_raw_data: dict, nuclei_raw_data: dict,
-                           analytics_data: dict, duration: float, url, user_id: int = None):
+                           analytics_data: dict, duration: float, url, user_id: int = None,
+                           summary_stats: dict = None, priority_matrix: dict = None, ai_summary: dict = None):
         engine = self._check_engine()
         _tables = []
         _zap_dump = json.dumps(zap_raw_data)
         _wapiti_dump = json.dumps(wapiti_raw_data)
         _plugins_dump = json.dumps(plugins)
+        total_union = sum(len(scanner_results) for scanner_results in analytics_data["union"])
+        total_intersection = len(analytics_data.get("intersection", []))
+        total_vulnerabilities = total_union + total_intersection
         with Session(engine) as session:
             report_id = str(uuid.uuid4())
             report = Report(
@@ -132,16 +141,43 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="full scan",
                 scanner="all",
-                total_vulnerabilities=len(analytics_data["union"][0]) + len(analytics_data["union"][1]),
+                total_vulnerabilities=total_vulnerabilities,
                 critical_count=utils.critical_counter(analytics_data["union"], analytics_data["rules"]),
             )
+
+            # ATTACH PRE-COMPUTED ANALYTICS
+            if summary_stats:
+                report.high_confidence_vulns = summary_stats.get("high_confidence_vulns", 0)
+                report.medium_confidence_vulns = summary_stats.get("medium_confidence_vulns", 0)
+                report.low_confidence_vulns = summary_stats.get("low_confidence_vulns", 0)
+
+                agreement_str = summary_stats.get("scanner_agreement_rate", "0%")
+                confidence_str = summary_stats.get("confidence_rate", "0%")
+
+                report.scanner_agreement_rate = float(agreement_str.rstrip('%')) if agreement_str else 0.0
+                report.confidence_rate = float(confidence_str.rstrip('%')) if confidence_str else 0.0
+
+            if priority_matrix:
+                report.high_severity_high_confidence = priority_matrix["quadrant_counts"].get(
+                    "high_severity_high_confidence", 0)
+                report.high_severity_low_confidence = priority_matrix["quadrant_counts"].get(
+                    "high_severity_low_confidence", 0)
+                report.low_severity_high_confidence = priority_matrix["quadrant_counts"].get(
+                    "low_severity_high_confidence", 0)
+                report.low_severity_low_confidence = priority_matrix["quadrant_counts"].get(
+                    "low_severity_low_confidence", 0)
+
+            if ai_summary:
+                report.ai_summary_vulnerabilities = ai_summary.get("summary", {}).get("vulnerabilities", "")
+                report.ai_summary_tech = ai_summary.get("summary", {}).get("tech", "")
+
             _tables.append(report)
             tech_disc = TechDiscovery(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 data=_plugins_dump
-            )  # Search_vulns table??
+            )
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
@@ -150,7 +186,7 @@ class Database:
                 scanner="all",
                 scan_type="full scan",
                 data=analytics_data["union"],
-                crawl_depth=0,  # TODO: fetch crawler results and add data here
+                crawl_depth=0,
                 scan_duration=floor(duration),
                 target_url=url
             )
@@ -164,12 +200,16 @@ class Database:
             return report_id
 
     def insert_automated_report(self, timestamp: datetime, plugins: list,
-                           zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url):
+                                zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url,
+                                session_name: str = None):
         engine = self._check_engine()
         _tables = []
         _zap_dump = json.dumps(zap_raw_data)
         _wapiti_dump = json.dumps(wapiti_raw_data)
         _plugins_dump = json.dumps(plugins)
+        total_union = sum(len(scanner_results) for scanner_results in analytics_data["union"])
+        total_intersection = len(analytics_data.get("intersection", []))
+        total_vulnerabilities = total_union + total_intersection
         with Session(engine) as session:
             report_id = str(uuid.uuid4())
             report = Report(
@@ -177,16 +217,21 @@ class Database:
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 scan_type="automated",
                 scanner="all",
-                total_vulnerabilities=len(analytics_data["union"][0]) + len(analytics_data["union"][1]),
+                total_vulnerabilities=total_vulnerabilities,
                 critical_count=utils.critical_counter(analytics_data["union"], analytics_data["rules"]),
             )
+
+            # COMPUTE ANALYTICS BEFORE COMMITTING
+            if session_name:
+                report = compute_and_attach_analytics(report, analytics_data, session_name)
+
             _tables.append(report)
             tech_disc = TechDiscovery(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
                 scan_date=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 data=_plugins_dump
-            )  # Search_vulns table??
+            )
             scan = Scan(
                 id=str(uuid.uuid4()),
                 report_id=report_id,
@@ -194,7 +239,7 @@ class Database:
                 scanner="all",
                 scan_type="full scan",
                 data=analytics_data["union"],
-                crawl_depth=0,  # TODO: fetch crawler results and add data here
+                crawl_depth=0,
                 scan_duration=floor(duration),
                 target_url=url
             )
@@ -309,7 +354,6 @@ class Database:
             _entries.append(_vuln)
         session.add_all(_entries)
 
-
     @property
     def engine(self):
         if self._engine is None:
@@ -323,13 +367,12 @@ class Database:
             report = session.query(Report).filter(Report.id == report_id).first()
             if not report:
                 return None
-            # Assume SARIF is stored in the path attribute as a file path
             result = {
                 'id': report.id,
                 'scan_date': report.scan_date,
                 'scan_type': report.scan_type,
                 'scanner': report.scanner.upper() if report.scanner else None,
-                'raw_data': report.path  # path to SARIF file
+                'raw_data': report.path
             }
             return result
 
@@ -340,12 +383,10 @@ class Database:
             with Session(engine) as session:
                 report = session.query(Report).filter(Report.id == report_id).first()
                 if report:
-                    # Dependencies (scans, vulnerabilities, etc.) should be handled by
-                    # database foreign key cascading if configured (ON DELETE CASCADE).
                     session.delete(report)
                     session.commit()
                     return True
                 return False
         except Exception as e:
-            print(f"Error deleting report: {e}")
+            logger.error(f"Error deleting report: {e}")
             return False
