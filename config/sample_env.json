@@ -18,11 +18,13 @@
     "full_scan": "~/.RestackAPI/reports/full_scan",
     "quick_scan": "~/.RestackAPI/reports/quick_scan",
     "subfinder": "~/.RestackAPI/tmp/discovery/subfinder",
-    "nuclei": "~/.RestackAPI/tmp/vulnerabilities/nuclei"
+    "nuclei": "~/.RestackAPI/tmp/vulnerabilities/nuclei",
+    "exports": "~/.RestackAPI/reports/exports"
   },
 
   "api_keys": {
     "_comment": "API keys. Do NOT commit real keys to Git.",
-    "gemini": ""
+    "gemini": "",
+    "database": ""
   }
 }

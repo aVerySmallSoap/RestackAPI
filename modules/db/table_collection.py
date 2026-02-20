@@ -98,6 +98,7 @@ class Vulnerability(Base):
     method: Mapped[str]
     state: Mapped[str]
     data: Mapped[JSON] = mapped_column(JSON())
+    is_duplicate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Timestamps (Laravel default)
     created_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
