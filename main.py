@@ -3,6 +3,8 @@ import json
 import os
 import time
 import uuid
+import re
+from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -40,6 +42,40 @@ from services.managers.ConnectionManager import connection_manager
 from services.managers.ScheduleManager import ScheduleManager
 
 # == END OF TESTING MODULES==
+
+# == helper functions and global variables ==
+def sanitize_session_id(session_id: str) -> str:
+    """
+    Validate session_id is a safe UUID before using in file paths.
+    Prevents path traversal attacks like ../../etc/passwd
+    Raises HTTPException if invalid.
+    """
+    # Only allow valid UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    uuid_pattern = re.compile(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        re.IGNORECASE
+    )
+    if not uuid_pattern.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+    return session_id
+
+
+def safe_path_join(base_dir: str, filename: str) -> str:
+    """
+    Safely join a base directory with a filename.
+    Ensures the resulting path stays within base_dir.
+    Prevents path traversal even if sanitize_session_id is bypassed.
+    """
+    base = Path(base_dir).resolve()
+    full_path = (base / filename).resolve()
+
+    # Ensure the resolved path is still inside base_dir
+    if not str(full_path).startswith(str(base)):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    return str(full_path)
+
+# == END OF helper functions and global variables ==
 
 # == TEST WEBSITES ==
 # https://github.com/WebGoat/WebGoat
@@ -94,26 +130,33 @@ async def get_scan_result(session_id: str):
     Retrieve scan results by session ID.
     This endpoint is called by the frontend after WebSocket confirms scan completion.
     """
+    # SECURITY FIX: Validate session_id before using in file path
+    sanitize_session_id(session_id)
+
     full_scan_path = DEV_ENV["report_paths"]["full_scan"]
     quick_scan_path = DEV_ENV["report_paths"].get("quick_scan", full_scan_path)
 
-    # Try full scan path first
-    file_path = f"{full_scan_path}\\{session_id}.json"
+    # Use safe_path_join instead of os.path.join
+    file_path = safe_path_join(full_scan_path, f"{session_id}.json")
     if not os.path.exists(file_path):
-        # Try quick scan path
-        file_path = f"{quick_scan_path}\\{session_id}.json"
+        file_path = safe_path_join(quick_scan_path, f"{session_id}.json")
 
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"Scan results not found for session {session_id}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Scan results not found for session {session_id}"
+        )
 
     try:
         async with aiofiles.open(file_path, "r") as f:
             content = await f.read()
             data = json.loads(content)
 
-        # Check if scan failed
         if data.get("status") == "failed":
-            raise HTTPException(status_code=500, detail=data.get("error", "Scan failed"))
+            raise HTTPException(
+                status_code=500,
+                detail=data.get("error", "Scan failed")
+            )
 
         return data
     except json.JSONDecodeError:
@@ -121,7 +164,6 @@ async def get_scan_result(session_id: str):
     except Exception as e:
         logger.error(f"Error retrieving scan results for {session_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/v1/wapiti/scan/quick")
 async def wapiti_scan(request: ScanRequest, background_tasks: BackgroundTasks) -> dict:

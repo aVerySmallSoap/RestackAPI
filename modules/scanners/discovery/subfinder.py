@@ -3,6 +3,7 @@
 # -d dnsc.edu.ph -o ./root/.config/subfinder/test.txt -oJ
 import pathlib
 from loguru import logger
+import os
 
 import docker
 
@@ -27,14 +28,14 @@ def run_scan():
 
 def parse_output(session:str):
     logger.info(f"Parsing {session}")
-    with open(f"{base_path}\\subfinder_{session}.txt") as f:
+    with open(os.path.join(base_path, f"subfinder_{session}.txt")) as f:
         links = [line.strip() for line in f]
         print(links)
     logger.info(f"Finished parsing {session}")
 
 def cleanup(session:str):
     logger.info(f"Cleaning up {session}")
-    pathlib.Path(f"{base_path}\\subfinder_{session}.txt").unlink()
+    pathlib.Path(os.path.join(base_path, f"subfinder_{session}.txt")).unlink()
     logger.info(f"Finished cleaning up {session}")
 
 def reset_reports():

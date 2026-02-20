@@ -11,7 +11,7 @@ from sqlalchemy import delete
 # Import your models
 from modules.db.table_collection import ScheduledScans
 from modules.utils.background_runnable import run_scheduled_scan
-
+from modules.utils.load_configs import DEV_ENV
 
 class ScheduleManager:
     _scheduler = None
@@ -23,7 +23,7 @@ class ScheduleManager:
         # Configure the JobStore to use PostgreSQL.
         jobstores = {
             'default': SQLAlchemyJobStore(
-                url="postgresql+psycopg2://postgres:root@localhost:5432/restack_schedules"
+                url=DEV_ENV["api_keys"]["database"],
             )
         }
 

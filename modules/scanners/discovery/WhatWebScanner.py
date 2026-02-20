@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import platform
 
 import aiofiles
 import docker
@@ -42,7 +43,8 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         _tech = []
         _cookies = []
         _extra = []
-        with open(f"{self._base_whatweb_path}\\{session}.json", "r+") as _:
+        with open(os.path.join(self._base_whatweb_path, f"{session}.json")
+, "r+") as _:
             report = json.load(_)
             if len(report) <= 0 or report is None:
                 return {"error": True, "message": self._NO_TECH_MESSAGE}
@@ -73,7 +75,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
         _tech = []
         _cookies = []
         _extra = []
-        with aiofiles.open(f"{self._base_whatweb_path}\\{session}.json", "r+") as _:
+        with aiofiles.open(os.path.join(self._base_whatweb_path, f"{session}.json"), "r+") as _:
             report = json.load(_)
             if len(report) <= 0 or report is None:
                 return {"error": True, "message": self._NO_TECH_MESSAGE}
@@ -99,13 +101,28 @@ class WhatWebAdapter(IAsyncScannerAdapter):
 
     @staticmethod
     async def _launch_mounted_container(url: str, session: str):
-        """Launches a docker container that utilizes the volume flag to store a whatweb report."""
         client = docker.from_env()
-        client.containers.run("iamyourdev/whatweb",
-                              ["./whatweb", "-a", "1", "--verbose", "--log-json", f"./reports/{session}.json", url],
-                              volumes={
-                                  DEV_ENV["report_paths"]["whatweb"]: {'bind': '/src/whatweb/reports', 'mode': 'rw'}},
-                              auto_remove=True)
+        
+        run_kwargs = {
+            "volumes": {
+                DEV_ENV["report_paths"]["whatweb"]: {
+                    'bind': '/src/whatweb/reports',
+                    'mode': 'rw'
+                }
+            },
+            "auto_remove": True
+        }
+        
+        # Only set user on Linux/macOS to avoid root-owned files
+        if platform.system() != "Windows":
+            run_kwargs["user"] = f"{os.getuid()}:{os.getgid()}"
+        
+        client.containers.run(
+            "iamyourdev/whatweb",
+            ["./whatweb", "-a", "1", "--verbose", "--log-json",
+            f"./reports/{session}.json", url],
+            **run_kwargs
+        )
 
     @staticmethod
     def _parse_meta_generator(meta_data: dict, technologies: list):
@@ -170,7 +187,7 @@ class WhatWebAdapter(IAsyncScannerAdapter):
             while container.status == "running":
                 print("Still querying with search_vulns...")
                 time.sleep(2)
-            with open(f"{self._searchVulns_path}\\{session}.json", "r") as f:
+            with open(os.path.join(self._searchVulns_path, f"{session}.json"), "r") as f:
                 queries = json.load(f)
                 _returnable = {"found": {}, "not_found": []}
                 for key, value in queries.items():

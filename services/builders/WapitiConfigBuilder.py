@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 from loguru import logger
@@ -40,7 +41,8 @@ class WapitiConfigBuilder(IConfigBuilder):
         try:
             if session is None:
                 raise ValueError
-            self._path = f"{self._wapiti_base_path}\\{session}.json"
+            # Use os.path.join for cross-platform compatibility
+            self._path = os.path.join(self._wapiti_base_path, f"{session}.json")
             return self
         except ValueError:
             logger.error("There should always be a session!")

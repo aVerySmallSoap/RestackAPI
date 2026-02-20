@@ -1,6 +1,7 @@
 # AI Summary and recommendation using Google's Gemini
 
 import json
+import os
 from google import genai
 from google.genai import types
 from loguru import logger
@@ -9,7 +10,8 @@ from modules.utils.load_configs import DEV_ENV
 
 def summarize_with_ai(session: str) -> dict:
     ai_client = genai.Client(api_key=DEV_ENV["api_keys"]["gemini"])
-    with open(f"{DEV_ENV['report_paths']['full_scan']}\\{session}.json", "r") as f:
+    report_path = os.path.join(DEV_ENV['report_paths']['full_scan'], f"{session}.json")
+    with open(report_path, "r") as f:
         try:
             report = json.load(f)
             _data = {"union": report["data"]["union"], "intersection": report["data"]["intersection"],"rules": report["data"]["rules"]}

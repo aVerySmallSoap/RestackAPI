@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -126,7 +127,7 @@ async def process_full_scan_job(url: str, user_id: int = None, session_id: str =
         # Save to disk
         logger.info(f"[{session_id}] Saving results to disk...")
         scan_tracker.advance_step(session_id, ScanStep.SAVING)
-        async with aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w") as f:
+        async with aiofiles.open(os.path.join(full_scan_path, f"{session_id}.json"), "w") as f:
             await f.write(json.dumps(data, indent=4))
 
         # Save to database
@@ -164,7 +165,7 @@ async def process_full_scan_job(url: str, user_id: int = None, session_id: str =
             "error": str(e),
             "status": "failed"
         }
-        async with aiofiles.open(f"{full_scan_path}\\{session_id}.json", "w") as f:
+        async with aiofiles.open(os.path.join(full_scan_path, f"{session_id}.json"), "w") as f:
             await f.write(json.dumps(error_data, indent=4))
 
         raise
@@ -239,7 +240,8 @@ async def process_quick_scan_job(url: str, user_id: int = None, session_id: str 
         # Save to disk
         logger.info(f"[{session_id}] Saving results to disk...")
         scan_tracker.advance_step(session_id, ScanStep.SAVING)
-        async with aiofiles.open(f"{quick_scan_path}\\{session_id}.json", "w") as f:
+        async with aiofiles.open(os.path.join(quick_scan_path, f"{session_id}.json"), "w") as f:
+
             await f.write(json.dumps(data, indent=4))
 
         # Save to database
@@ -271,7 +273,7 @@ async def process_quick_scan_job(url: str, user_id: int = None, session_id: str 
             "error": str(e),
             "status": "failed"
         }
-        async with aiofiles.open(f"{quick_scan_path}\\{session_id}.json", "w") as f:
+        async with aiofiles.open(os.path.join(quick_scan_path, f"{session_id}.json"), "w") as f:
             await f.write(json.dumps(error_data, indent=4))
 
         raise

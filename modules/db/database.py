@@ -13,11 +13,12 @@ from modules.db.session import Base
 from modules.db.table_collection import Report, TechDiscovery, Scan, Vulnerability
 from modules.analytics.analytics_helper import compute_and_attach_analytics
 from loguru import logger
+from modules.utils.load_configs import DEV_ENV
 
 
 class Database:
     _engine = None
-    _url = "postgresql+psycopg2://postgres:root@localhost:5432/restack"
+    _url = DEV_ENV["api_keys"]["database"]
 
     def __int__(self):
         pass
@@ -202,7 +203,8 @@ class Database:
             return report_id
 
     def insert_automated_report(self, timestamp: datetime, plugins: list,
-                                zap_raw_data: dict, wapiti_raw_data: dict, analytics_data: dict, duration: float, url,
+                                zap_raw_data: dict, wapiti_raw_data: dict, nuclei_raw_data: dict,
+                                analytics_data: dict, duration: float, url,
                                 session_name: str = None):
         engine = self._check_engine()
         _tables = []
@@ -392,3 +394,19 @@ class Database:
         except Exception as e:
             logger.error(f"Error deleting report: {e}")
             return False
+        
+if __name__ == "__main__":
+    # 1. Initialize the database handler
+    db = Database()
+    
+    # 2. (Optional) If you want to wipe the DB first and start fresh:
+    # print("Cleaning old tables...")
+    # db.clean()
+    
+    # 3. Run the migration
+    print("Starting database migration...")
+    try:
+        db.migrate()
+        print("Migration successful! Tables created.")
+    except Exception as e:
+        print(f"Migration failed: {e}")

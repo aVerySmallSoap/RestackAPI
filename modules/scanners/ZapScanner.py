@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import time
 from urllib import parse as url_parser
@@ -107,7 +108,12 @@ class ZapScanner(IScannerAdapter):
             logger.debug("Cleaning up containers and associated directories...")
             container.stop()
             container.remove()
-            shutil.rmtree(f"{self._base_zap_path}\\{config.get('session')}")
+            
+            # Use os.path.join for cross-platform compatibility
+            session_dir = os.path.join(self._base_zap_path, config.get('session'))
+            if os.path.exists(session_dir):
+                shutil.rmtree(session_dir)
+            
             return _returnable
         except TypeError as type_e:
             # log
@@ -130,7 +136,11 @@ class ZapScanner(IScannerAdapter):
         try:
             _har_alerts = self._fetch_header_and_request_alerts(config.get("zap_instance"),
                                                                 session=config.get("session"))
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
+            
+            # Use os.path.join for cross-platform compatibility
+            report_path = os.path.join(self._base_zap_path, f"{config.get('session')}.json")
+            
+            with open(report_path, "r") as f:
                 report = json.load(f)
                 _sarif = {
                     "version": "2.1.0",
@@ -230,7 +240,10 @@ class ZapScanner(IScannerAdapter):
             while int(zap.pscan.records_to_scan) > 0:
                 time.sleep(2)
 
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
+            # Use os.path.join for cross-platform compatibility
+            output_path = os.path.join(self._base_zap_path, f"{config.get('session')}.json")
+            
+            with open(output_path, "w") as file:
                 file.write(
                     json.dumps(
                         zap.core.alerts(baseurl=config.get("url"))
@@ -250,7 +263,11 @@ class ZapScanner(IScannerAdapter):
             while int(zap.ascan.status(scan_id)) < 100:
                 # log
                 time.sleep(2)
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "w") as file:
+            
+            # Use os.path.join for cross-platform compatibility
+            output_path = os.path.join(self._base_zap_path, f"{config.get('session')}.json")
+            
+            with open(output_path, "w") as file:
                 file.write(json.dumps(zap.core.alerts(baseurl=config.get("url"))))
                 file.flush()
                 file.close()
@@ -328,7 +345,10 @@ class ZapScanner(IScannerAdapter):
     def _fetch_header_and_request_alerts(self, zap: ZAPv2, **config) -> dict:
         logger.info("Fetching headers and request alerts...")
         try:
-            with open(f"{self._base_zap_path}\\{config.get('session')}.json", "r") as f:
+            # Use os.path.join for cross-platform compatibility
+            report_path = os.path.join(self._base_zap_path, f"{config.get('session')}.json")
+            
+            with open(report_path, "r") as f:
                 report = json.load(f)
                 message_ids: str = ""
                 for alert in report:
