@@ -191,7 +191,7 @@ def main():
     print(f"     {Colors.YELLOW}pip install -r requirements.txt{Colors.NC}")
     print()
     print("  3. Start the application:")
-    print(f"     {Colors.YELLOW}python main.py{Colors.NC}")
+    print(f"     {Colors.YELLOW}uvicorn main:app{Colors.NC}")
     print()
     
     print_success("You're all set!")

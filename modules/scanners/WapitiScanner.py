@@ -1,7 +1,7 @@
 import json
 import os
-import subprocess
 import platform
+import subprocess
 
 from loguru import logger
 
@@ -18,15 +18,22 @@ class WapitiAdapter(IScannerAdapter):
         :param config:
         """
         config_builder = WapitiConfigBuilder()
-        _config = config_builder.url(config.get("url")).modules(config.get("modules")).output_path(
-            config.get("session")).build()
-        
+        _config = (
+            config_builder.url(config.get("url"))
+            .modules(config.get("modules"))
+            .output_path(config.get("session"))
+            .build()
+        )
+
         # Cross-platform subprocess call
         creation_flags = 0
         if platform.system() == "Windows":
             creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
-        
-        process = subprocess.Popen(_config, creationflags=creation_flags if platform.system() == "Windows" else 0)
+
+        process = subprocess.Popen(
+            _config,
+            creationflags=creation_flags if platform.system() == "Windows" else 0,
+        )
         process.wait()
         return self.parse_results(config.get("session"))
 
@@ -40,7 +47,10 @@ class WapitiAdapter(IScannerAdapter):
         with open(DEV_ENV["templates_path"]["wapiti"], "r") as file:
             _template = json.load(file)
             if len(user_config) == 0:
-                return {"error": True, "message": "Invalid config: Configuration empty!"}
+                return {
+                    "error": True,
+                    "message": "Invalid config: Configuration empty!",
+                }
             for key, value in user_config.items():
                 match key:
                     case "url":
@@ -67,12 +77,16 @@ class WapitiAdapter(IScannerAdapter):
         :type session: str
         :return: The parsed report"""
         logger.debug("Parsing Wapiti report...")
-        sarif_report = {"version": "2.1.0",
-                        "runs": [{"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}]}
-        
+        sarif_report = {
+            "version": "2.1.0",
+            "runs": [
+                {"tool": {"driver": {"name": "Wapiti3", "rules": []}}, "results": []}
+            ],
+        }
+
         # Use os.path.join for cross-platform compatibility
         report_path = os.path.join(self._wapiti_base_path, f"{session}.json")
-        
+
         with open(report_path, "r") as report:
             report = json.load(report)
             self._parse_definitions_to_sarif(sarif_report, report)
@@ -88,7 +102,12 @@ class WapitiAdapter(IScannerAdapter):
                                     result.update({"message": {"text": value}})
                                 case "path":
                                     result["locations"].append(
-                                        {"physicalLocation": {"artifactLocation": {"uri": value}}})
+                                        {
+                                            "physicalLocation": {
+                                                "artifactLocation": {"uri": value}
+                                            }
+                                        }
+                                    )
                                 case _:
                                     if key == "wstg":
                                         result["properties"].update({"wstg": value})
@@ -146,11 +165,14 @@ class WapitiAdapter(IScannerAdapter):
     def start_automatic_scan(url: str, user_config: dict = None):
         config_builder = WapitiConfigBuilder()
         _config = config_builder.url(url).output_path(user_config["path"]).build()
-        
+
         # Cross-platform subprocess call
         creation_flags = 0
         if platform.system() == "Windows":
             creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
-        
-        process = subprocess.Popen(_config, creationflags=creation_flags if platform.system() == "Windows" else 0)
+
+        process = subprocess.Popen(
+            _config,
+            creationflags=creation_flags if platform.system() == "Windows" else 0,
+        )
         process.wait()
