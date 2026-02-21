@@ -1,22 +1,19 @@
 import asyncio
 import random
-import time
 import uuid
 
 from loguru import logger
 
-from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType
-from modules.scanners.ThreadableZapScanner import ZapScanner
-from modules.scanners.WapitiScanner import WapitiAdapter
-from modules.scanners.WhatWebScanner import WhatWebAdapter
 import modules.utils.__utils__ as utilities
-import modules.utils.docker_utils as docker_utilities
+from modules.interfaces.enums.restack_enums import ZAPScanType, ScannerType, ScanStep
+from modules.scanners.WapitiScanner import WapitiAdapter
+from modules.scanners.discovery.WhatWebScanner import WhatWebAdapter
+from modules.scanners.ZapScanner import ZapScanner
+from modules.scanners.vulnerabilities.nuclei import NucleiAdapter
+from modules.utils.preinstances import scan_tracker
 
 
 class ScannerManager:
-
-    _active_scans = {}
-
     @logger.catch
     async def start_scan(self, url: str, session: str, **config):
         """
@@ -39,9 +36,9 @@ class ScannerManager:
             raise ValueError  # Throw no scan type defined error
         elif not isinstance(scanner_type, ScannerType):
             logger.error("{obj} is not of type {type}", scanner_type, type(ScannerType))
-            raise TypeError # Throw invalid scanner type
+            raise TypeError  # Throw invalid scanner type
 
-        # init required objects for scanning ( extra info tools like whatweb, search_vulns, etc )
+        # init required objects for scanning ( extra info tools like whatweb, search_vulns, etc.)
         _whatweb_scanner = WhatWebAdapter()
 
         match scanner_type:
@@ -69,22 +66,17 @@ class ScannerManager:
                             _default_port = random.randint(300, 10000)
                         config["port"] = _default_port
                 except Exception:
-                    logger.exception("Something went wrong when checking for valid zap parameters! Please see the log file!")
+                    logger.exception(
+                        "Something went wrong when checking for valid zap parameters! Please see the log file!")
 
                 logger.info("Starting a whatweb query...")
+                scan_tracker.advance_step(session, ScanStep.WHATWEB)
                 _raw_whatweb_results, _query_results = await _whatweb_scanner.start_scan(url, session)
 
+
                 zap_scan_object = ZapScanner()
-                logger.info("Spawning a new container in docker...")
-                container = docker_utilities.start_automatic_zap_service(
-                    {
-                        "port": config.get("port"),
-                        "apikey": config.get("api_key"),
-                        "session_name": session
-                    }
-                )
-                await asyncio.sleep(120) # Wait for the container to run
-                logger.info("Starting a zap scan in the backgroud...")
+                logger.info("Starting a zap scan in the background...")
+                scan_tracker.advance_step(session, ScanStep.ZAP)
                 _zap_result = zap_scan_object.start_scan(
                     {
                         "scanner_type": scan_type,
@@ -92,49 +84,63 @@ class ScannerManager:
                         "port": config.get("port"),
                         "session": session,
                         "url": url,
-                        "scan_type": ZAPScanType.PASSIVE,
-                        "threadable_instance": zap_scan_object
+                        "scan_type": config.get("scan_type")
                     }
                 )
-                container.stop()
+                logger.info(f"[{session}] ZAP scan completed")
+                scan_tracker.advance_step(session, ScanStep.CLEANUP)
                 return _zap_result, _query_results, _raw_whatweb_results
+
             case ScannerType.WAPITI:
-                wapiti_scan_object = WapitiAdapter()
-                await asyncio.to_thread(
-                    wapiti_scan_object.start_scan
+                wapiti_instance = config.get("wapiti_instance")
+                wapiti_config = config.get("wapiti_config")
+
+                if wapiti_instance is None:
+                    logger.warning("No wapiti scanner instance detected, creating a new instance...")
+                    wapiti_instance = WapitiAdapter()
+                if wapiti_config is None:
+                    logger.warning("There was no configuration set for wapiti, generating a default configuration...")
+                    wapiti_config = wapiti_instance.generate_config({
+                        "modules": ["all"]
+                    })
+
+                logger.info("Starting a wapiti scan...")
+                scan_tracker.advance_step(session, ScanStep.WAPITI)
+
+                result = wapiti_instance.start_scan(
+                    {
+                        "url": url,
+                        "session": session,
+                        "wapiti_config": wapiti_config.get("modules", ["all"])
+                    }
                 )
-            case ScannerType.FULL:
-                pass
+                logger.info(f"[{session}] Wapiti scan completed")
+                scan_tracker.advance_step(session, ScanStep.CLEANUP)
+                return result
+
+            case ScannerType.NUCLEI:
+                nuclei_instance = config.get("nuclei_instance")
+
+                if nuclei_instance is None:
+                    logger.warning("No nuclei scanner instance detected, creating a new instance...")
+                    nuclei_instance = NucleiAdapter()
+
+                logger.info("Starting a nuclei scan...")
+                scan_tracker.advance_step(session, ScanStep.NUCLEI)
+                _nuclei_result = nuclei_instance.start_scan({
+                    "url": url,
+                    "session": session
+                })
+                logger.info(f"[{session}] Nuclei scan completed")
+                scan_tracker.advance_step(session, ScanStep.CLEANUP)
+                return _nuclei_result, {}, {}
+
             case _:
                 # log
-                raise ValueError # There is no valid argumentor match that was passed here
+                raise ValueError  # There is no valid argument or match that was passed here
 
     def _run_start_scan(self, url: str, session: str, **config):
         return asyncio.run(self.start_scan(url, session, **config))
-
-    def poll_running_scans(self, scan_id: str):
-        if scan_id is None:
-            return {"error": True, "message": "Invalid scan_id"}
-        elif type(scan_id) is not str:
-            return {"error": True, "message": "scan_id is not of type str"}
-        try:
-            scan = self._active_scans.get(scan_id)
-            if scan is None:
-                return {"status": 200, "message": f"Scan with {scan_id} was not found"}
-            else:
-                return {"status": 200, "message": "success", "data": scan}
-        except Exception as e:
-            #log
-            print(e) # Something unexpected happened here
-            return {"error": True, "message": "Internal Server Error"}
-
-    def generate_unique_session(self) -> str:
-        if len(self._active_scans) == 0:
-            return utilities.generate_random_uuid()
-        _session = utilities.generate_random_uuid()
-        while self._active_scans.get(_session):
-            _session = utilities.generate_random_uuid()
-        return _session
 
     @staticmethod
     def generate_random_config() -> dict:
@@ -146,7 +152,3 @@ class ScannerManager:
         while utilities.is_port_in_use(_default_port):
             _default_port = random.randint(300, 10000)
         return {"api_key": str(uuid.uuid4()), "port": _default_port}
-
-    @logger.catch
-    def _run_blocking_activities(self):
-        pass

@@ -2,8 +2,11 @@ import asyncio
 import os
 import socket
 import uuid
+from typing import TYPE_CHECKING
 
-from services.managers.ScannerManager import ScannerManager
+if TYPE_CHECKING:
+    from services.managers.ScannerManager import ScannerManager
+
 
 def unroll_sarif_rules(sarif_report: dict) -> dict:
     """
@@ -25,7 +28,6 @@ def critical_counter(sarif_report: dict, rules: dict | list = None) -> int:
     Counts the number of critical vulnerabilities
     """
     count = 0
-    print(rules)
     if rules is None:
         _rules = unroll_sarif_rules(sarif_report)
     else:
@@ -69,12 +71,20 @@ def check_directories():
     if not os.path.exists("./temp"):
         os.mkdir("./temp")
 
+def create_required_files_and_directories():
+    """
+    This function creates required files and directories needed for the app to function.
+    However, this function does not take into account any missing API keys from third party services
+    """
+    pass
+
 
 def check_url_local_test(url: str) -> str:
     """Check if a url contains localhost or 127.0.0.1 and returns the docker equivalent"""
     if url.__contains__("localhost") or url.__contains__("127.0.0.1"):
         return url.replace("localhost", "host.docker.internal")
     return url
+
 
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -84,11 +94,15 @@ def is_port_in_use(port: int) -> bool:
         except OSError:
             return True
 
+
 def generate_random_uuid() -> str:
     return str(uuid.uuid4())
 
-def run_start_scan(instance: ScannerManager, url: str, session: str, **config):
+
+def run_start_scan(instance: "ScannerManager", url: str, session: str, **config):
     """
     Run the async start_scan from ScannerManager in a coroutine.
     """
     return asyncio.run(instance.start_scan(url, session, **config))
+
+

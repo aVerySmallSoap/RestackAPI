@@ -1,14 +1,30 @@
 {
+  "_comment": "RestackAPI Configuration File. Use forward slashes for all paths - they work on Windows, Linux, and macOS. Use ~ for home directory or relative paths from project root.",
+
   "templates_path": {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\config\\templates\\wapiti_config.json",
+    "_comment": "Paths to scanner configuration templates.",
+    "wapiti": "templates/wapiti_config.json",
+    "active_scans": "templates/active_scan.json",
     "whatweb": "",
-    "zap": ""
+    "zap": "templates/zap_template.json"
   },
-  "report_paths" : {
-    "wapiti": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\wapiti",
-    "whatweb": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\whatweb",
-    "zap": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\zap",
-    "searchVulns": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\temp\\search_vulns",
-    "full_scan": "%USERPROFILE%\\AppData\\Local\\Temp\\RestackAPI\\reports\\full_scan"
+
+  "report_paths": {
+    "_comment": "Where scanner output files are stored. Use ~ paths to store outside the project (recommended for large scan outputs).",
+    "wapiti": "~/.RestackAPI/reports/wapiti",
+    "whatweb": "~/.RestackAPI/temp/whatweb",
+    "zap": "~/.RestackAPI/temp/zap",
+    "searchVulns": "~/.RestackAPI/temp/search_vulns",
+    "full_scan": "~/.RestackAPI/reports/full_scan",
+    "quick_scan": "~/.RestackAPI/reports/quick_scan",
+    "subfinder": "~/.RestackAPI/tmp/discovery/subfinder",
+    "nuclei": "~/.RestackAPI/tmp/vulnerabilities/nuclei",
+    "exports": "~/.RestackAPI/reports/exports"
+  },
+
+  "api_keys": {
+    "_comment": "API keys. Do NOT commit real keys to Git.",
+    "gemini": "",
+    "database": ""
   }
 }
