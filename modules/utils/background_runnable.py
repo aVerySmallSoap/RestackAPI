@@ -3,26 +3,19 @@ import json
 import os
 import time
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 import aiofiles
 from loguru import logger
 
 from modules.analytics.ai_recosum import summarize_with_ai
-from modules.analytics.vulnerability_analysis import (
-    analyze_results,
-    create_priority_matrix,
-    generate_summary_stats,
-)
+from modules.analytics.vulnerability_analysis import analyze_results, generate_summary_stats, create_priority_matrix
 from modules.db.database import Database
-from modules.interfaces.enums.restack_enums import ScannerType, ScanStep, ZAPScanType
+from modules.interfaces.enums.restack_enums import ScannerType, ZAPScanType, ScanStep
+from modules.scanners.WapitiScanner import WapitiAdapter
 from modules.scanners.discovery.WhatWebScanner import WhatWebAdapter
 from modules.scanners.vulnerabilities.nuclei import NucleiAdapter
-from modules.scanners.WapitiScanner import WapitiAdapter
-from modules.utils.__utils__ import (
-    check_url_local_test,
-    generate_random_uuid,
-    run_start_scan,
-)
+from modules.utils.__utils__ import check_url_local_test, run_start_scan, generate_random_uuid
 from modules.utils.load_configs import DEV_ENV
 from modules.utils.preinstances import scan_tracker
 from services.managers.ScannerManager import ScannerManager
@@ -30,13 +23,7 @@ from services.managers.ScannerManager import ScannerManager
 database = Database()
 
 
-async def process_full_scan_job(
-    url: str,
-    user_id: int = None,
-    session_id: str = None,
-    config: dict = None,
-    is_automated: bool = False,
-):
+async def process_full_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None, is_automated: bool = False):
     """
     Universal full scan processor for both manual API calls and automated scheduler jobs.
 
@@ -82,7 +69,7 @@ async def process_full_scan_job(
             scanner_type=ScannerType.ZAP,
             scan_type=ZAPScanType.FULL,
             api_key=zap_config["api_key"],
-            port=zap_config["port"],
+            port=zap_config["port"]
         )
 
         # Run Wapiti scan
@@ -94,7 +81,7 @@ async def process_full_scan_job(
             session_id,
             scanner_type=ScannerType.WAPITI,
             wapiti_config=wapiti_config,
-            scanner_instance=_wapiti_scanner,
+            scanner_instance=_wapiti_scanner
         )
 
         # Run Nuclei scan
@@ -105,7 +92,7 @@ async def process_full_scan_job(
             _URL,
             session_id,
             scanner_type=ScannerType.NUCLEI,
-            scanner_instance=_nuclei_scanner,
+            scanner_instance=_nuclei_scanner
         )
 
         # Calculate scan time
@@ -115,14 +102,8 @@ async def process_full_scan_job(
         # Analyze results
         logger.info(f"[{session_id}] Analyzing results...")
         scan_tracker.advance_step(session_id, ScanStep.ANALYZING)
-        _results = analyze_results(
-            session_id,
-            wapiti_result,
-            zap_result,
-            nuclei_result,
-            raw_whatweb_result,
-            query_result,
-        )
+        _results = analyze_results(session_id, wapiti_result, zap_result, nuclei_result, raw_whatweb_result,
+                                   query_result)
         summary_stats = generate_summary_stats(_results)
         priority_matrix = create_priority_matrix(_results)
         ai_summary = summarize_with_ai(session_id)
@@ -133,32 +114,26 @@ async def process_full_scan_job(
             "data": _results,
             "plugins": {
                 "fingerprinted": raw_whatweb_result,
-                "patchable": query_result
-                if not query_result.get("error")
-                else query_result.get("message"),
+                "patchable": query_result if not query_result.get("error") else query_result.get("message")
             },
             "scan_time": scan_time,
             "summary": {
                 "stats": summary_stats,
                 "matrix": priority_matrix,
-                "ai": ai_summary,
-            },
+                "ai": ai_summary
+            }
         }
 
         # Save to disk
         logger.info(f"[{session_id}] Saving results to disk...")
         scan_tracker.advance_step(session_id, ScanStep.SAVING)
-        async with aiofiles.open(
-            os.path.join(full_scan_path, f"{session_id}.json"), "w"
-        ) as f:
+        async with aiofiles.open(os.path.join(full_scan_path, f"{session_id}.json"), "w") as f:
             await f.write(json.dumps(data, indent=4))
 
         # Save to database
         report_id = database.insert_scan_report(
             _scan_start,
-            raw_whatweb_result
-            if query_result.get("error")
-            else raw_whatweb_result.get("data", raw_whatweb_result),
+            raw_whatweb_result if query_result.get("error") else raw_whatweb_result.get("data", raw_whatweb_result),
             zap_result,
             wapiti_result,
             nuclei_result,
@@ -169,17 +144,14 @@ async def process_full_scan_job(
             summary_stats=summary_stats,
             priority_matrix=priority_matrix,
             ai_summary=ai_summary,
-            is_automated=is_automated,
-            report_id=session_id,
+            is_automated = is_automated
         )
 
         data["id"] = report_id
 
         # Update final status
         scan_tracker.advance_step(session_id, ScanStep.SUCCESS)
-        logger.success(
-            f"[{session_id}] Full scan completed successfully. Report ID: {report_id}"
-        )
+        logger.success(f"[{session_id}] Full scan completed successfully. Report ID: {report_id}")
 
         return data
 
@@ -188,22 +160,18 @@ async def process_full_scan_job(
         scan_tracker.advance_step(session_id, ScanStep.FAILED)
 
         # Save error state to disk
-        error_data = {"session_id": session_id, "error": str(e), "status": "failed"}
-        async with aiofiles.open(
-            os.path.join(full_scan_path, f"{session_id}.json"), "w"
-        ) as f:
+        error_data = {
+            "session_id": session_id,
+            "error": str(e),
+            "status": "failed"
+        }
+        async with aiofiles.open(os.path.join(full_scan_path, f"{session_id}.json"), "w") as f:
             await f.write(json.dumps(error_data, indent=4))
 
         raise
 
 
-async def process_quick_scan_job(
-    url: str,
-    user_id: int = None,
-    session_id: str = None,
-    config: dict = None,
-    is_automated: bool = False,
-):
+async def process_quick_scan_job(url: str, user_id: int = None, session_id: str = None, config: dict = None, is_automated: bool = False, ):
     """
     Universal quick scan (Wapiti only) processor for both manual API calls and automated jobs.
 
@@ -220,9 +188,7 @@ async def process_quick_scan_job(
     _wapiti_scanner = WapitiAdapter()
     _whatweb_scanner = WhatWebAdapter()
     local_scanner_manager = ScannerManager()
-    quick_scan_path = DEV_ENV["report_paths"].get(
-        "quick_scan", DEV_ENV["report_paths"]["full_scan"]
-    )
+    quick_scan_path = DEV_ENV["report_paths"].get("quick_scan", DEV_ENV["report_paths"]["full_scan"])
 
     # Generate session ID if not provided
     if not session_id:
@@ -249,15 +215,13 @@ async def process_quick_scan_job(
             session_id,
             scanner_type=ScannerType.WAPITI,
             wapiti_config=wapiti_config,
-            scanner_instance=_wapiti_scanner,
+            scanner_instance=_wapiti_scanner
         )
 
         # Run WhatWeb scan
         logger.info(f"[{session_id}] Starting WhatWeb scan...")
         scan_tracker.advance_step(session_id, ScanStep.WHATWEB)
-        _whatweb_results, _query_results = await _whatweb_scanner.start_scan(
-            _URL, session_id
-        )
+        _whatweb_results, _query_results = await _whatweb_scanner.start_scan(_URL, session_id)
 
         scan_tracker.advance_step(session_id, ScanStep.CLEANUP)
         scan_time = time.perf_counter() - time_start
@@ -267,43 +231,35 @@ async def process_quick_scan_job(
             "session_id": session_id,
             "data": result,
             "plugins": {
-                "fingerprinted": _whatweb_results
-                if _whatweb_results.get("error")
-                else _whatweb_results.get("data"),
-                "patchable": _query_results,
+                "fingerprinted": _whatweb_results if _whatweb_results.get("error") else _whatweb_results.get("data"),
+                "patchable": _query_results
             },
-            "scan_time": scan_time,
+            "scan_time": scan_time
         }
 
         # Save to disk
         logger.info(f"[{session_id}] Saving results to disk...")
         scan_tracker.advance_step(session_id, ScanStep.SAVING)
-        async with aiofiles.open(
-            os.path.join(quick_scan_path, f"{session_id}.json"), "w"
-        ) as f:
+        async with aiofiles.open(os.path.join(quick_scan_path, f"{session_id}.json"), "w") as f:
+
             await f.write(json.dumps(data, indent=4))
 
         # Save to database
         report_id = database.insert_wapiti_quick_report(
             _scan_start,
-            _whatweb_results
-            if _whatweb_results.get("error")
-            else _whatweb_results.get("data"),
+            _whatweb_results if _whatweb_results.get("error") else _whatweb_results.get("data"),
             result,
             scan_time,
             _URL,
             user_id=user_id,
-            is_automated=is_automated,
-            report_id=session_id,
+            is_automated=is_automated
         )
 
         data["id"] = report_id
 
         # Update final status
         scan_tracker.advance_step(session_id, ScanStep.SUCCESS)
-        logger.success(
-            f"[{session_id}] Quick scan completed successfully. Report ID: {report_id}"
-        )
+        logger.success(f"[{session_id}] Quick scan completed successfully. Report ID: {report_id}")
 
         return data
 
@@ -312,10 +268,12 @@ async def process_quick_scan_job(
         scan_tracker.advance_step(session_id, ScanStep.FAILED)
 
         # Save error state to disk
-        error_data = {"session_id": session_id, "error": str(e), "status": "failed"}
-        async with aiofiles.open(
-            os.path.join(quick_scan_path, f"{session_id}.json"), "w"
-        ) as f:
+        error_data = {
+            "session_id": session_id,
+            "error": str(e),
+            "status": "failed"
+        }
+        async with aiofiles.open(os.path.join(quick_scan_path, f"{session_id}.json"), "w") as f:
             await f.write(json.dumps(error_data, indent=4))
 
         raise
