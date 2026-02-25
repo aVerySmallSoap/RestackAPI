@@ -20,6 +20,24 @@ class ZapScanner(IScannerAdapter):
     _timeout = 10_000
     EXCLUDED_ALERT_IDS = ["10104"]
 
+    # PERFORMANCE: Fast polling
+    POLLING_INTERVAL = 2  # Quick 2-second polls
+
+    # PERFORMANCE: Aggressive crawl limits for speed
+    MAX_CRAWL_DEPTH = 2  # Shallow depth for speed
+    MAX_CRAWL_DURATION = 180  # 3 minutes max
+
+    # PERFORMANCE: Exclude static files
+    EXCLUDED_EXTENSIONS = [
+        'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico',
+        'css', 'scss', 'less',
+        'woff', 'woff2', 'ttf', 'eot', 'otf',
+        'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm',
+        'mp3', 'wav', 'ogg', 'flac',
+        'zip', 'tar', 'gz', 'rar', '7z',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'
+    ]
+
     @logger.catch
     def start_scan(self, config: dict, **kwargs):
         zap: ZAPv2
@@ -61,7 +79,9 @@ class ZapScanner(IScannerAdapter):
         else:
             zap = config.get("zap_instance")
 
-        self._context_lookup(zap, url=config.get("url"))
+        self._configure_zap_performance(zap)
+        self._context_lookup(zap, url=config.get("url"), api_key=config.get("api_key"), port=config.get("port"))
+
         try:
             match config["scan_type"]:
                 case ZAPScanType.PASSIVE:
@@ -121,6 +141,29 @@ class ZapScanner(IScannerAdapter):
         except Exception as e:
             # log
             print(f"Unexpected behavior\n{e}")
+
+    @logger.catch
+    def _configure_zap_performance(self, zap: ZAPv2):
+        """PERFORMANCE: Maximum speed configuration"""
+        try:
+            # AGGRESSIVE threading
+            zap.ascan.set_option_thread_per_host(12)  # Max threads per host
+            zap.ascan.set_option_host_per_scan(4)  # Scan multiple hosts
+
+            # AGGRESSIVE spider
+            zap.spider.set_option_max_duration(self.MAX_CRAWL_DURATION // 60)
+            zap.spider.set_option_max_depth(self.MAX_CRAWL_DEPTH)
+            zap.spider.set_option_thread_count(12)  # Max spider threads
+            zap.spider.set_option_parse_robots_txt(False)  # Ignore robots.txt for speed
+
+            # Exclude static files
+            for ext in self.EXCLUDED_EXTENSIONS:
+                zap.spider.exclude_from_scan(f".*\\.{ext}$")
+
+            logger.info("Performance configs applied")
+        except Exception as e:
+            logger.warning(f"Config warning: {e}")
+
 
     @logger.catch
     def stop_scan(self, session: str):
@@ -238,7 +281,7 @@ class ZapScanner(IScannerAdapter):
         logger.info("Starting a zap scan in the passive mode...")
         try:
             while int(zap.pscan.records_to_scan) > 0:
-                time.sleep(2)
+                time.sleep(1)
 
             # Use os.path.join for cross-platform compatibility
             output_path = os.path.join(self._base_zap_path, f"{config.get('session')}.json")
@@ -261,7 +304,7 @@ class ZapScanner(IScannerAdapter):
         try:
             scan_id = zap.ascan.scan(config.get("url"), recurse=True)
             while int(zap.ascan.status(scan_id)) < 100:
-                # log
+                logger.debug(f"Active scan: {zap.ascan.status(scan_id)}%")  # Add this line
                 time.sleep(2)
             
             # Use os.path.join for cross-platform compatibility
@@ -278,68 +321,42 @@ class ZapScanner(IScannerAdapter):
     @staticmethod
     @logger.catch
     def _context_lookup(zap: ZAPv2, **config):
-        logger.info("Starting a context lookup")
+        """PERFORMANCE: Fast context lookup - Traditional spider only"""
+        logger.info("Starting context lookup")
         try:
-            # Start of context lookup
             zap.core.access_url(config.get("url"), followredirects=True)
 
-            # Crawling
-            # Traditional Spider
+            # PERFORMANCE: Traditional Spider ONLY (fastest)
             try:
-                # Configuration
-                zap.spider.set_option_parse_robots_txt(True)
-                zap.spider.set_option_parse_robots_txt(True)
+                zap.spider.set_option_parse_robots_txt(False)  # Speed
+                zap.spider.set_option_max_depth(ZapScanner.MAX_CRAWL_DEPTH)
+                zap.spider.set_option_max_duration(ZapScanner.MAX_CRAWL_DURATION // 60)
+                zap.spider.set_option_thread_count(15)  # Max threads
 
-                # Scanning
-                scan_id = zap.spider.scan(url=config.get("url"), recurse=True)
-                time.sleep(5)
+                # Exclude static files
+                for ext in ZapScanner.EXCLUDED_EXTENSIONS:
+                    zap.spider.exclude_from_scan(f".*\\.{ext}$")
+
+                scan_id = zap.spider.scan(url=config.get("url"), recurse=True, maxChildren=20)
+
+                scan_start = time.time()
                 while int(zap.spider.status(scan_id)) < 100:
-                    print(f"Traditional spider crawling @ {int(zap.spider.status(scan_id))}%")
-                    time.sleep(5)
+                    # Timeout protection
+                    if time.time() - scan_start > ZapScanner.MAX_CRAWL_DURATION:
+                        logger.warning("Spider timeout - stopping")
+                        zap.spider.stop(scan_id)
+                        break
 
-                # Additional context (future feature for seeding more URLs)
-            except Exception:
-                # log
-                pass  # Unexpected behavior or HTTPConnection error
-
-            # Ajax Spider
-            try:
-                # Configuration
-                zap.ajaxSpider.set_option_enable_extensions(True)
-                zap.ajaxSpider.set_option_max_crawl_depth(0)
-                zap.ajaxSpider.set_option_reload_wait(10)
-
-                # Scanning
-                zap.ajaxSpider.scan(config.get("url"))
-                time.sleep(5)
-                while zap.ajaxSpider.status == "running":
-                    print(f"Ajax spider crawling and is currently: {zap.ajaxSpider.status}")
-                    time.sleep(5)
-            except Exception:
-                # log
-                pass  # Unexpected behavior or HTTPConnection error
-
-            # Client Spider (Experimental)
-            try:
-                headers = {
-                    "Accept": "application/json",
-                    "X-ZAP-API-Key": config.get("api_key"),
-                }
-                base = f"http://localhost:{config.get('port')}/JSON"
-                scan_id = requests.get(f"{base}/clientSpider/action/scan",
-                                       params={"url": config.get("url"), "pageLoadTime": "30"}, headers=headers).json()[
-                    'scan']
-                time.sleep(2)
-                while int(requests.get(f'{base}/clientSpider/view/status', params={'scanId': scan_id},
-                                       headers=headers).json()['status']) < 100:
+                    logger.debug(f"Spider: {zap.spider.status(scan_id)}%")
                     time.sleep(2)
-            except Exception:
-                # log
-                pass  # Unexpected behaviour or HTTPConnection error
 
-        except Exception:
-            # log
-            pass  # unexpected behavior
+            except Exception as e:
+                logger.warning(f"Spider failed: {e}")
+
+            # PERFORMANCE: Skip AJAX and Client spiders for speed
+
+        except Exception as e:
+            logger.error(f"Context lookup failed: {e}")
 
     @logger.catch
     def _fetch_header_and_request_alerts(self, zap: ZAPv2, **config) -> dict:
