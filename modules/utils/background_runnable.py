@@ -66,7 +66,7 @@ async def process_full_scan_job(
 
     # Generate configurations
     zap_config = local_scanner_manager.generate_random_config()
-    wapiti_config = _wapiti_scanner.generate_config({"modules": ["all"]})
+    wapiti_config = _wapiti_scanner.generate_config({"modules": ["common"]})
 
     # Initialize tracking
     scan_tracker.add_scan(session_id, _URL, ScanStep.INIT)
@@ -181,6 +181,8 @@ async def process_full_scan_job(
             f"[{session_id}] Full scan completed successfully. Report ID: {report_id}"
         )
 
+        await asyncio.sleep(6)
+
         return data
 
     except Exception as e:
@@ -198,11 +200,11 @@ async def process_full_scan_job(
 
 
 async def process_quick_scan_job(
-    url: str,
-    user_id: int = None,
-    session_id: str = None,
-    config: dict = None,
-    is_automated: bool = False,
+        url: str,
+        user_id: int = None,
+        session_id: str = None,
+        config: dict = None,
+        is_automated: bool = False,
 ):
     """
     Universal quick scan (Wapiti only) processor for both manual API calls and automated jobs.
@@ -259,43 +261,69 @@ async def process_quick_scan_job(
             _URL, session_id
         )
 
+        logger.info(f"[{session_id}] WhatWeb scan completed")
         scan_tracker.advance_step(session_id, ScanStep.CLEANUP)
+
+        # Calculate scan time
+        logger.debug(f"[{session_id}] Calculating scan time...")
         scan_time = time.perf_counter() - time_start
+        logger.debug(f"[{session_id}] Scan time: {scan_time:.2f}s")
 
         # Prepare response data
-        data = {
-            "session_id": session_id,
-            "data": result,
-            "plugins": {
-                "fingerprinted": _whatweb_results
-                if _whatweb_results.get("error")
-                else _whatweb_results.get("data"),
-                "patchable": _query_results,
-            },
-            "scan_time": scan_time,
-        }
+        logger.debug(f"[{session_id}] Preparing response data...")
+        logger.debug(f"[{session_id}] Wapiti result type: {type(result)}")
+        logger.debug(f"[{session_id}] WhatWeb result type: {type(_whatweb_results)}")
+
+        try:
+            data = {
+                "session_id": session_id,
+                "data": result,
+                "plugins": {
+                    "fingerprinted": _whatweb_results
+                    if _whatweb_results.get("error")
+                    else _whatweb_results.get("data"),
+                    "patchable": _query_results,
+                },
+                "scan_time": scan_time,
+            }
+            logger.debug(f"[{session_id}] Response data prepared successfully")
+        except Exception as e:
+            logger.error(f"[{session_id}] Failed to prepare response data: {e}", exc_info=True)
+            raise
 
         # Save to disk
         logger.info(f"[{session_id}] Saving results to disk...")
         scan_tracker.advance_step(session_id, ScanStep.SAVING)
-        async with aiofiles.open(
-            os.path.join(quick_scan_path, f"{session_id}.json"), "w"
-        ) as f:
-            await f.write(json.dumps(data, indent=4))
+
+        try:
+            async with aiofiles.open(
+                    os.path.join(quick_scan_path, f"{session_id}.json"), "w"
+            ) as f:
+                await f.write(json.dumps(data, indent=4))
+            logger.debug(f"[{session_id}] Results saved to disk successfully")
+        except Exception as e:
+            logger.error(f"[{session_id}] Failed to save results to disk: {e}", exc_info=True)
+            raise
 
         # Save to database
-        report_id = database.insert_wapiti_quick_report(
-            _scan_start,
-            _whatweb_results
-            if _whatweb_results.get("error")
-            else _whatweb_results.get("data"),
-            result,
-            scan_time,
-            _URL,
-            user_id=user_id,
-            is_automated=is_automated,
-            report_id=session_id,
-        )
+        logger.debug(f"[{session_id}] Saving to database...")
+        try:
+            report_id = database.insert_wapiti_quick_report(
+                _scan_start,
+                _whatweb_results
+                if _whatweb_results.get("error")
+                else _whatweb_results.get("data"),
+                result,
+                scan_time,
+                _URL,
+                user_id=user_id,
+                is_automated=is_automated,
+                report_id=session_id,
+            )
+            logger.debug(f"[{session_id}] Saved to database with report ID: {report_id}")
+        except Exception as e:
+            logger.error(f"[{session_id}] Failed to save to database: {e}", exc_info=True)
+            raise
 
         data["id"] = report_id
 
@@ -305,18 +333,33 @@ async def process_quick_scan_job(
             f"[{session_id}] Quick scan completed successfully. Report ID: {report_id}"
         )
 
+        await asyncio.sleep(6)
+
+        # IMPORTANT: Remove from active scans tracker
+        scan_tracker.remove_scan(session_id)
+        logger.debug(f"[{session_id}] Removed from active scans tracker")
+
         return data
 
     except Exception as e:
-        logger.error(f"[{session_id}] Quick scan failed: {e}")
+        logger.error(f"[{session_id}] Quick scan failed: {e}", exc_info=True)
         scan_tracker.advance_step(session_id, ScanStep.FAILED)
 
         # Save error state to disk
         error_data = {"session_id": session_id, "error": str(e), "status": "failed"}
-        async with aiofiles.open(
-            os.path.join(quick_scan_path, f"{session_id}.json"), "w"
-        ) as f:
-            await f.write(json.dumps(error_data, indent=4))
+        try:
+            async with aiofiles.open(
+                    os.path.join(quick_scan_path, f"{session_id}.json"), "w"
+            ) as f:
+                await f.write(json.dumps(error_data, indent=4))
+        except Exception as file_error:
+            logger.error(f"[{session_id}] Failed to save error state: {file_error}")
+
+        # Remove from tracker even on failure
+        try:
+            scan_tracker.remove_scan(session_id)
+        except Exception as tracker_error:
+            logger.error(f"[{session_id}] Failed to remove from tracker: {tracker_error}")
 
         raise
 

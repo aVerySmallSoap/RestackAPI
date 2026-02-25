@@ -22,6 +22,7 @@ class WapitiConfigBuilder(IConfigBuilder):
         "--headless",
         "hidden",
         "--flush-session",
+        "--scope", "url",  # PERFORMANCE: only scan exact URL
     ]
 
     # == Configurable ==
@@ -67,12 +68,12 @@ class WapitiConfigBuilder(IConfigBuilder):
         self._scan = level
         return self
 
-    def max_scan_time(self, timeout: str = "180"):
+    def max_scan_time(self, timeout: str = "300"):
         """Maximum scan time in seconds."""
         self._scan_time = timeout
         return self
 
-    def max_concurrent_tasks(self, max_concurrent_tasks: str = "2"):
+    def max_concurrent_tasks(self, max_concurrent_tasks: str = "8"):
         self._concurrent_tasks = max_concurrent_tasks
         return self
 

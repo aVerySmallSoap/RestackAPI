@@ -75,19 +75,38 @@ class ScanTracker:
 
     def fetch_all_scans(self) -> dict:
         """Returns a dict format compatible with your frontend"""
-        results = {}
-        with Session(self._db.engine) as session:
-            scans = session.scalars(select(ActiveScan)).all()
-            if not scans:
-                return {}  # Return empty to indicate no scans
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                results = {}
+                with Session(self._db.engine) as session:
+                    scans = session.scalars(select(ActiveScan)).all()
+                    if not scans:
+                        return {}  # Return empty to indicate no scans
 
-            for scan in scans:
-                results[scan.session_id] = {
-                    "session": scan.session_id,
-                    "target": scan.target,
-                    "step": scan.step,
-                }
-        return results
+                    for scan in scans:
+                        results[scan.session_id] = {
+                            "session": scan.session_id,
+                            "target": scan.target,
+                            "step": scan.step,
+                        }
+                return results
+
+            except OperationalError as e:
+                logger.warning(
+                    f"Database connection lost while fetching scans (attempt {attempt + 1}/{max_retries}): {e}"
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    self._db.engine.dispose()
+                else:
+                    logger.error(
+                        f"Failed to fetch scans after {max_retries} attempts"
+                    )
+                    return {}  # Return empty dict instead of crashing
+            except Exception as e:
+                logger.error(f"Unexpected error fetching scans: {e}")
+                return {}  # Return empty dict instead of crashing
 
     def advance_step(self, session_id: str, step: ScanStep):
         """Update the step of a specific scan with retry logic for connection issues"""

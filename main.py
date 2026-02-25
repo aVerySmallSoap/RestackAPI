@@ -401,6 +401,8 @@ async def add_schedule(job: ScheduleRequest):
 @app.websocket("/api/v1/ws/scans/poll")
 async def poll_scans(websocket: WebSocket):
     await connection_manager.connect(websocket)
+    previous_scans = {}  # Track previous state
+
     try:
         while True:
             await asyncio.sleep(5)  # Poll database every 5 seconds
@@ -408,22 +410,59 @@ async def poll_scans(websocket: WebSocket):
                 # Use asyncio.to_thread because database access is blocking
                 active_scans = await asyncio.to_thread(scan_tracker.fetch_all_scans)
 
+                # Check for completed scans (were in previous_scans but not in current)
+                if previous_scans:
+                    for session_id in previous_scans:
+                        if session_id not in active_scans:
+                            # Scan completed, send final notification
+                            await websocket.send_json({
+                                "completed": {
+                                    session_id: {
+                                        "session": session_id,
+                                        "step": "Completed",
+                                        "message": "Scan finished successfully"
+                                    }
+                                }
+                            })
+
                 if not active_scans:
                     await websocket.send_json({"message": "No active scans"})
                 else:
                     await websocket.send_json(active_scans)
 
-            except Exception as e:
-                logger.error(f"Error polling active scans: {e}")
-                # Don't try to send error if connection is already closed
+                # Update previous state
+                previous_scans = active_scans.copy()
+
+            except WebSocketDisconnect:
+                # Client disconnected during send, break the loop
+                logger.info("WebSocket client disconnected during polling")
+                raise  # Re-raise to be caught by outer handler
+            except ConnectionError as e:
+                # WebSocket connection error, break the loop
+                logger.info(f"WebSocket connection error: {e}")
                 break
+            except Exception as e:
+                # Log database or other errors but continue polling
+                logger.error(f"Error polling active scans: {e}", exc_info=True)
+                try:
+                    await websocket.send_json({
+                        "error": "Failed to fetch scans",
+                        "message": str(e)
+                    })
+                except:
+                    logger.warning("Could not send error to client, connection may be closed")
+                    break
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception as e:
-        logger.error(f"Unexpected WebSocket error: {e}")
+        logger.error(f"Unexpected WebSocket error: {e}", exc_info=True)
     finally:
-        connection_manager.disconnect(websocket)
+        # Safely disconnect, catching any errors
+        try:
+            connection_manager.disconnect(websocket)
+        except Exception as e:
+            logger.warning(f"Error during WebSocket disconnect: {e}")
 
 
 @app.post("/test/tracker")
