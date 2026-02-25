@@ -163,11 +163,16 @@ class Database:
         _zap_dump = json.dumps(zap_raw_data)
         _wapiti_dump = json.dumps(wapiti_raw_data)
         _plugins_dump = json.dumps(plugins)
-        total_union = sum(
+
+        # total_union = sum(
+        #     len(scanner_results) for scanner_results in analytics_data["union"]
+        # )
+        # total_intersection = len(analytics_data.get("intersection", []))
+        # total_vulnerabilities = total_union + total_intersection
+
+        total_vulnerabilities = sum(
             len(scanner_results) for scanner_results in analytics_data["union"]
         )
-        total_intersection = len(analytics_data.get("intersection", []))
-        total_vulnerabilities = total_union + total_intersection
         with Session(engine) as session:
             if report_id is None:
                 report_id = str(uuid.uuid4())
@@ -249,7 +254,11 @@ class Database:
             session.add_all(_tables)
             try:
                 self._insert_zap_vulnerabilities(
-                    report_id, timestamp, zap_raw_data, session
+                    report_id,
+                    timestamp,
+                    zap_raw_data,
+                    session,
+                    intersection_list=analytics_data.get("intersection", []),
                 )
                 self._insert_wapiti_vulnerabilities(
                     report_id,
@@ -349,11 +358,20 @@ class Database:
                 raise
 
     @staticmethod
-    def _insert_zap_vulnerabilities(parent_report_id, scan_time, raw_data, session):
+    def _insert_zap_vulnerabilities(
+        parent_report_id, scan_time, raw_data, session, intersection_list=None
+    ):
         _entries = []
         _rules = utils.unroll_sarif_rules(raw_data)
 
         _severity_map = {"error": "High", "warning": "Medium", "note": "Low"}
+        from collections import Counter
+
+        intersection_endpoint_counts = Counter()
+        for iv in intersection_list or []:
+            ep = iv["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+            intersection_endpoint_counts[ep] += 1
+        marked_counts = Counter()
 
         for vulnerability in raw_data["runs"][0]["results"]:
             _rule = _rules.get(vulnerability["ruleId"])
@@ -362,6 +380,15 @@ class Database:
             # Use SARIF level instead of ZAP's own risk property
             _level = vulnerability.get("level", "note").lower()
             _severity = _severity_map.get(_level, "Informational")
+
+            endpoint = vulnerability["locations"][0]["physicalLocation"][
+                "artifactLocation"
+            ]["uri"]
+
+            is_dup = False
+            if intersection_endpoint_counts.get(endpoint, 0) > marked_counts[endpoint]:
+                is_dup = True
+                marked_counts[endpoint] += 1
 
             _vuln = Vulnerability(
                 id=str(uuid.uuid4()),
@@ -382,7 +409,7 @@ class Database:
                 confidence=vulnerability["properties"]["confidence"],
                 state="new",
                 data=_json_dump,
-                is_duplicate=False,
+                is_duplicate=is_dup,
             )
             _entries.append(_vuln)
         session.add_all(_entries)
